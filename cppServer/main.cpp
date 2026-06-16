@@ -1,7 +1,10 @@
 #include <winsock2.h>
 #pragma comment(lib, "ws2_32.lib")
 
+#include <thread>
 #include <iostream>
+
+int handleClient(SOCKET);
 
 int main()
 {
@@ -47,25 +50,43 @@ int main()
     }
     std::cout << "listening on port 5050...\n";
 
-    sockaddr_in clientAddr;
-    int addrLen = sizeof(clientAddr);
-    SOCKET clientSocket = accept(listenSocket, (sockaddr*)&clientAddr, &addrLen);
-    if (clientSocket == INVALID_SOCKET) {
-        std::cout << "accept failed: " << WSAGetLastError() << "\n";
-        closesocket(listenSocket);
-        WSACleanup();
-        return 1;
-    }
-    std::cout << "client connected!\n";
+    while (true) {
+        sockaddr_in clientAddr;
+        int addrLen = sizeof(clientAddr);
+        SOCKET clientSocket = accept(listenSocket, (sockaddr*)&clientAddr, &addrLen);
+        if (clientSocket == INVALID_SOCKET) {
+            std::cout << "accept failed: " << WSAGetLastError() << "\n";
+            closesocket(listenSocket);
+            WSACleanup();
+            return 1;
+        }
+        std::cout << "client connected!\n";
 
-    char buffer[1024] = {};
-    int recvLen = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
-    if (recvLen > 0) {
-        std::cout << "received (" << recvLen << " bytes): " << buffer << "\n";
-        send(clientSocket, buffer, recvLen, 0);
+        std::thread(handleClient, clientSocket).detach();
     }
+
+
 
     closesocket(listenSocket);
     WSACleanup();
     return 0;
+}
+
+int handleClient(SOCKET s)
+{
+    char buffer[1024] = {};
+    while (true)
+    {
+        int recvLen = recv(s, buffer, sizeof(buffer) - 1, 0);
+        if (recvLen > 0) {
+            std::cout << "received (" << recvLen << " bytes): " << buffer << "\n";
+            send(s, buffer, recvLen, 0);
+        }
+        else if (recvLen <= 0) {
+            break;
+        }
+    }
+
+    closesocket(s);
+    return 1;
 }
