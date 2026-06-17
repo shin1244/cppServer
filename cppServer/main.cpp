@@ -27,6 +27,7 @@ Session g_sessionList[1000];
 std::unordered_map<int, Session*> g_sessionMap;
 std::stack<int> g_freeIndices;
 std::atomic<int> g_nextId{ 100 };
+int g_sessionCount = 0;
 
 void postRecv(Session*);
 void postSend(Session*, const char*, int);
@@ -65,9 +66,8 @@ void workerThread() {
         if (ctx->type == IO_RECV) {
             std::cout << "[worker " << std::this_thread::get_id()
                 << "] got completion, bytes=" << bytesTransferred << "\n";
-            for (Session& s : g_sessionList) {
-                postSend(&s, ctx->buffer, bytesTransferred);
-            }
+            for (int i = 0; i < g_sessionCount; i++)
+                postSend(&g_sessionList[i], ctx->buffer, bytesTransferred);
             
             delete ctx;
             postRecv(session);
@@ -228,12 +228,16 @@ void initPool() {
 }
 
 int allocSession() {
-    if (g_freeIndices.empty()) return -1;
-    int idx = g_freeIndices.top();
-    g_freeIndices.pop();
-    return idx;
+    if (g_sessionCount >= 1000) return -1;
+    return g_sessionCount++;
 }
 
-void freeSession(int idx) {
-    g_freeIndices.push(idx);
+void freeSession(int index) {
+    g_sessionMap.erase(g_sessionList[index].id);
+    g_sessionCount--;
+    if (index != g_sessionCount) {
+        g_sessionList[index] = g_sessionList[g_sessionCount];
+        g_sessionList[index].index = index;
+        g_sessionMap[g_sessionList[index].id] = &g_sessionList[index];
+    }
 }
