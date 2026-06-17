@@ -3,11 +3,14 @@
 #include <thread>
 #include <vector>
 #include <iostream>
-
-HANDLE g_iocp;   // 전역 IOCP 핸들 (완료 큐)
+#include <unordered_map>
+#include <stack>
+#include <atomic>
 
 struct Session {
     SOCKET socket;
+    int id;
+    int index;
 };
 
 enum IoType { IO_RECV, IO_SEND };
@@ -19,8 +22,17 @@ struct IoContext {
     IoType type;
 };
 
+HANDLE g_iocp;   // IOCP 핸들
+Session g_sessionList[1000];
+std::unordered_map<int, Session*> g_sessionMap;
+std::stack<int> g_freeIndices;
+std::atomic<int> g_nextId{ 100 };
+
 void postRecv(Session*);
 void postSend(Session*, const char*, int);
+void initPool();
+int allocSession();
+void freeSession(int);
 
 // 워커 스레드: 완료 큐를 계속 기다림
 void workerThread() {
@@ -43,15 +55,20 @@ void workerThread() {
         if (!ok || (ctx->type == IO_RECV && bytesTransferred == 0)) {
             closesocket(session->socket);
             std::cout << "[session " << session->socket << "] Disconnect\n";
-            delete ctx;
-            delete session;
+
+            g_sessionMap.erase(session->id);
+            freeSession(session->index);
+            delete ctx; 
             continue;
         }
 
         if (ctx->type == IO_RECV) {
             std::cout << "[worker " << std::this_thread::get_id()
                 << "] got completion, bytes=" << bytesTransferred << "\n";
-            postSend(session, ctx->buffer, bytesTransferred);
+            for (Session& s : g_sessionList) {
+                postSend(&s, ctx->buffer, bytesTransferred);
+            }
+            
             delete ctx;
             postRecv(session);
         }
@@ -66,6 +83,8 @@ int main() {
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
     std::cout << "Winsock ready\n";
+
+    initPool();
 
     g_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
     if (g_iocp == NULL) {
@@ -115,8 +134,19 @@ int main() {
         }
         std::cout << "client connected! socket=" << clientSocket << "\n";
 
-        Session* session = new Session();
+
+        int index = allocSession();
+        if (index == -1) {
+            closesocket(clientSocket);
+            continue;
+        }
+        Session* session = &g_sessionList[index];
+
         session->socket = clientSocket;
+        session->index = index;
+        session->id = g_nextId++;
+
+        g_sessionMap[session->id] = session;
 
         CreateIoCompletionPort((HANDLE)clientSocket, g_iocp, (ULONG_PTR)session, 0);
 
@@ -152,8 +182,9 @@ void postRecv(Session* session)
         if (err != WSA_IO_PENDING) {
             std::cout << "WSARecv failed: " << err << "\n";
             closesocket(session->socket);
+            g_sessionMap.erase(session->id);
+            freeSession(session->index);
             delete ctx;
-            delete session;
         }
     }
 }
@@ -188,4 +219,21 @@ void postSend(Session* session, const char* data, int len)
             delete ctx;
         }
     }
+}
+
+void initPool() {
+    for (int i = 0; i < 1000; i++) {
+        g_freeIndices.push(i);
+    }
+}
+
+int allocSession() {
+    if (g_freeIndices.empty()) return -1;
+    int idx = g_freeIndices.top();
+    g_freeIndices.pop();
+    return idx;
+}
+
+void freeSession(int idx) {
+    g_freeIndices.push(idx);
 }
