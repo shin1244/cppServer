@@ -7,20 +7,27 @@
 #include <stack>
 #include <atomic>
 
+class RingBuffer;
+
+const int HEADER_SIZE = 2;
+
 struct Session {
     SOCKET socket;
     int id;
     int index;
+
+    RingBuffer recvBuffer;
+    RingBuffer sendBuffer;
+
+    bool sendPending;
+
+    OVERLAPPED recvOverlapped;
+    OVERLAPPED sendOverlapped;
+    WSABUF recvWsaBuf;
+    WSABUF sendWsaBuf;
 };
 
 enum IoType { IO_RECV, IO_SEND };
-
-struct IoContext {
-    OVERLAPPED overlapped;
-    WSABUF wsaBuf;
-    char buffer[1024];
-    IoType type;
-};
 
 HANDLE g_iocp;   // IOCP 핸들
 Session g_sessionList[1000];
@@ -54,6 +61,14 @@ public:
             return head - tail - 1;
         }
     }
+    int GetLinearFreeSize() {
+        if (head < tail) {
+            return tail - head;
+        } 
+        else {
+            return 4096 - head;
+        }
+    }
     // 버퍼를 초기화 합니다.
     void Clear() { head = tail = 0; }
     // 현재 데이터를 새로 적을 수 있는 빈 공간의 시작 주소를 반환합니다.
@@ -77,10 +92,26 @@ public:
             }
             else {
                 memcpy(dest, &buffer[head], rightSize);
-                memcpy(dest + rightSize, &buffer, len - rightSize);
+                memcpy(dest + rightSize, &buffer[0], len - rightSize);
             }
         }
     }
+
+    bool Write(const char* data, int len) {
+        if (len > GetFreeSize()) return false;
+
+        int rightSize = 4096 - tail;
+        if (len <= rightSize) {
+            memcpy(&buffer[tail], data, len);
+        }
+        else {
+            memcpy(&buffer[tail], data, rightSize);
+            memcpy(&buffer[0], data + rightSize, len - rightSize);
+        }
+        OnWrite(len);
+        return true;
+    }
+
 };
 
 // 워커 스레드: 완료 큐를 계속 기다림
@@ -99,30 +130,33 @@ void workerThread() {
         );
 
         Session* session = (Session*)completionKey;
-        IoContext* ctx = (IoContext*)overlapped;
 
-        if (!ok || (ctx->type == IO_RECV && bytesTransferred == 0)) {
+        if (!ok) {
             closesocket(session->socket);
             std::cout << "[session " << session->socket << "] Disconnect\n";
 
             g_sessionMap.erase(session->id);
             freeSession(session->index);
-            delete ctx; 
             continue;
         }
 
-        if (ctx->type == IO_RECV) {
-            std::cout << "[worker " << std::this_thread::get_id()
-                << "] got completion, bytes=" << bytesTransferred << "\n";
-            for (int i = 0; i < g_sessionCount; i++)
-                postSend(&g_sessionList[i], ctx->buffer, bytesTransferred);
-            
-            delete ctx;
+        if (overlapped == &session->recvOverlapped) {
+            session->recvBuffer.OnWrite(bytesTransferred);
+
+            while (true) {
+                if (session->recvBuffer.GetUsedSize() < HEADER_SIZE) break;
+
+                char h[HEADER_SIZE];
+                session->recvBuffer.Peek(&h, HEADER_SIZE);
+
+            }
             postRecv(session);
         }
-        else if (ctx->type == IO_SEND){
+        else if (overlapped == &session->sendOverlapped){
             std::cout << "[worker] sent " << bytesTransferred << " bytes\n";
-            delete ctx;
+            session->sendBuffer.OnRead(bytesTransferred);
+            session->sendPending = false;
+            flushSend(session);
         }
     }
 }
@@ -209,8 +243,9 @@ void postRecv(Session* session)
 {
     IoContext* ctx = new IoContext();
     ZeroMemory(&ctx->overlapped, sizeof(ctx->overlapped));
-    ctx->wsaBuf.buf = ctx->buffer;
-    ctx->wsaBuf.len = sizeof(ctx->buffer);
+    ctx->wsaBuf.buf = session->recvBuffer.GetWriteBuffer();
+    ctx->wsaBuf.len = session->recvBuffer.GetFreeSize();
+
 
     DWORD flags = 0;
     DWORD byteRecv = 0;
@@ -237,36 +272,38 @@ void postRecv(Session* session)
     }
 }
 
-void postSend(Session* session, const char* data, int len)
-{
-    IoContext* ctx = new IoContext();
-    ZeroMemory(&ctx->overlapped, sizeof(ctx->overlapped));
+void flushSend(Session* session) {
+    if (session->sendPending) return;
+    int used = session->sendBuffer.GetLinearUsedSize();
+    if (used == 0) return;
 
-    memcpy(ctx->buffer, data, len);
-    ctx->wsaBuf.buf = ctx->buffer;
-    ctx->wsaBuf.len = len;
-
-    ctx->type = IO_SEND;
-
-    DWORD bytesSent = 0;
+    session->sendPending = true;
+    session->sendWsaBuf.buf = session->sendBuffer.GetReadBuffer();
+    session->sendWsaBuf.len = used;
     int ret = WSASend(
-        session->socket,
-        &ctx->wsaBuf,
-        1,
-        &bytesSent,
-        0,
-        &ctx->overlapped,
-        NULL
+        session->socket,          
+        &session->sendWsaBuf,      
+        1,                     
+        0,              
+        0,                       
+        &session->sendOverlapped,  
+        NULL                    
     );
 
     if (ret == SOCKET_ERROR) {
         int err = WSAGetLastError();
         if (err != WSA_IO_PENDING) {
             std::cout << "WSASend failed: " << err << "\n";
+            session->sendPending = false; 
             closesocket(session->socket);
-            delete ctx;
         }
     }
+}
+
+void postSend(Session* session, const char* data, int len)
+{
+    session->sendBuffer.Write(data, len);
+    flushSend(session);
 }
 
 void initPool() {
