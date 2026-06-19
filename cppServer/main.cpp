@@ -7,9 +7,16 @@
 #include <stack>
 #include <atomic>
 
+#pragma pack(push, 1)
+struct PacketHeader {
+    unsigned short size; 
+    unsigned short id;  
+};
+#pragma pack(pop)
+
 class RingBuffer;
 
-const int HEADER_SIZE = 2;
+const int HEADER_SIZE = 4;
 
 struct Session {
     SOCKET socket;
@@ -61,7 +68,7 @@ public:
             return head - tail - 1;
         }
     }
-    int GetLinearFreeSize() {
+    int GetLinearUsedSize() {
         if (head < tail) {
             return tail - head;
         } 
@@ -146,8 +153,11 @@ void workerThread() {
             while (true) {
                 if (session->recvBuffer.GetUsedSize() < HEADER_SIZE) break;
 
-                char h[HEADER_SIZE];
-                session->recvBuffer.Peek(&h, HEADER_SIZE);
+                PacketHeader header;
+                session->recvBuffer.Peek((char*)&header, HEADER_SIZE);
+
+                if (session->recvBuffer.GetUsedSize() < header.size) break;
+
 
             }
             postRecv(session);
@@ -241,22 +251,20 @@ int main() {
 
 void postRecv(Session* session)
 {
-    IoContext* ctx = new IoContext();
-    ZeroMemory(&ctx->overlapped, sizeof(ctx->overlapped));
-    ctx->wsaBuf.buf = session->recvBuffer.GetWriteBuffer();
-    ctx->wsaBuf.len = session->recvBuffer.GetFreeSize();
-
-
+    ZeroMemory(&session->recvOverlapped, sizeof(session->recvOverlapped));
+    session->recvWsaBuf.buf = session->recvBuffer.GetWriteBuffer();
+    session->recvWsaBuf.len = session->recvBuffer.GetFreeSize();
+    
     DWORD flags = 0;
     DWORD byteRecv = 0;
 
     int ret = WSARecv(
         session->socket,
-        &ctx->wsaBuf,
+        &session->recvWsaBuf,
         1,
         &byteRecv,
         &flags,
-        &ctx->overlapped,
+        &session->recvOverlapped,
         NULL
     );
 
@@ -267,7 +275,6 @@ void postRecv(Session* session)
             closesocket(session->socket);
             g_sessionMap.erase(session->id);
             freeSession(session->index);
-            delete ctx;
         }
     }
 }
