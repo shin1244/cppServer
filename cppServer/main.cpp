@@ -7,6 +7,7 @@
 #include <stack>
 #include <atomic>
 #include"RingBuffer.h"
+#include"DoubleBuffer.h"
 
 #pragma pack(push, 1)
 struct PacketHeader {
@@ -25,6 +26,7 @@ struct Session {
     RingBuffer sendBuffer;
 
     bool sendPending;
+    std::mutex sendLock;
 
     OVERLAPPED recvOverlapped;
     OVERLAPPED sendOverlapped;
@@ -32,9 +34,30 @@ struct Session {
     WSABUF sendWsaBuf;
 };
 
+enum class PacketId : unsigned short {
+    Connect,
+    Disconnect,
+    Move,
+    Attack,
+    Chat,
+};
+
+struct RecvPacket {
+    int sessionIndex;
+    PacketId id;
+    std::vector<char> body;
+};
+
+struct SendPacket
+{
+    std::vector<char> data;
+};
+
+constexpr float PLAYER_SPEED = 30.0f;
 HANDLE g_iocp;   // IOCP 핸들
 Session g_sessionList[1000];
 std::stack<int> g_freeIndices;
+DoubleBuffer<RecvPacket> g_recvQueue;
 
 void postRecv(Session*);
 void postSend(Session*, const char*, int);
@@ -42,7 +65,6 @@ void flushSend(Session*);
 void initPool();
 int allocSession();
 void freeSession(int index);
-
 
 
 // 워커 스레드: 완료 큐를 계속 기다림
@@ -86,16 +108,51 @@ void workerThread() {
                 session->recvBuffer.Peek(packet, header.size);
                 session->recvBuffer.OnRead(header.size);
 
-                postSend(session, packet, header.size);
+                RecvPacket recvPacket;
+                recvPacket.sessionIndex = session->index;
+                recvPacket.id = static_cast<PacketId>(header.id);
+                recvPacket.body.assign(packet + HEADER_SIZE, packet + header.size);
+
+                g_recvQueue.Push(std::move(recvPacket));
             }
             postRecv(session);
         }
         else if (overlapped == &session->sendOverlapped){
+            session->sendLock.lock();
             std::cout << "[worker] sent " << bytesTransferred << " bytes\n";
             session->sendBuffer.OnRead(bytesTransferred);
             session->sendPending = false;
             flushSend(session);
+            session->sendLock.unlock();
         }
+    }
+}
+
+void Accepter(SOCKET s) {
+    while (true)
+    {
+        sockaddr_in clientAddr = {};
+        int addrLen = sizeof(clientAddr);
+        SOCKET clientSocket = accept(s, (sockaddr*)&clientAddr, &addrLen);
+        if (clientSocket == INVALID_SOCKET) {
+            std::cout << "accept failed: " << WSAGetLastError() << "\n";
+            continue;
+        }
+        std::cout << "client connected! socket=" << clientSocket << "\n";
+
+
+        int index = allocSession();
+        if (index == -1) {
+            closesocket(clientSocket);
+            continue;
+        }
+        Session* session = &g_sessionList[index];
+
+        session->socket = clientSocket;
+
+        CreateIoCompletionPort((HANDLE)clientSocket, g_iocp, (ULONG_PTR)session, 0);
+
+        postRecv(session);
     }
 }
 
@@ -113,7 +170,7 @@ int main() {
     }
     std::cout << "IOCP created\n";
 
-    unsigned int n = std::thread::hardware_concurrency();
+    unsigned int n = std::thread::hardware_concurrency() - 1;
     std::cout << "spawning " << n << " worker threads\n";
 
     SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -137,38 +194,21 @@ int main() {
     }
     std::cout << "listening on port 5050...\n";
 
-    std::vector<std::thread> workers;
+    // IOCP 워커 쓰레드(코어 - 1)와 접속 쓰레드 생성
     for (unsigned int i = 0; i < n; i++)
-        workers.emplace_back(workerThread);
+        std::thread(workerThread).detach();
+    std::thread (Accepter, listenSocket).detach();
 
-    std::cout << "workers waiting on completion queue...\n";
-
-    while (true)
-    {
-        sockaddr_in clientAddr = {};
-        int addrLen = sizeof(clientAddr);
-        SOCKET clientSocket = accept(listenSocket, (sockaddr*)&clientAddr, &addrLen);
-        if (clientSocket == INVALID_SOCKET) {
-            std::cout << "accept failed: " << WSAGetLastError() << "\n";
-            continue;
+    // 메인루프 시작
+    std::vector<RecvPacket> buffer;
+    while (true) {
+        buffer.clear();
+        g_recvQueue.Swap(buffer);
+        for (auto& packet : buffer) {
+            handlePacket(packet);
         }
-        std::cout << "client connected! socket=" << clientSocket << "\n";
-
-
-        int index = allocSession();
-        if (index == -1) {
-            closesocket(clientSocket);
-            continue;
-        }
-        Session* session = &g_sessionList[index];
-
-        session->socket = clientSocket;
-
-        CreateIoCompletionPort((HANDLE)clientSocket, g_iocp, (ULONG_PTR)session, 0);
-
-        postRecv(session);
     }
-
+    
     WSACleanup();
     return 0;
 }
@@ -252,4 +292,19 @@ int allocSession() {
 
 void freeSession(int index) {
     g_freeIndices.push(index);
+}
+
+void handlePacket(RecvPacket& packet) {
+    switch (packet.id)
+    {
+    case PacketId::Move:
+        handleMove(packet);
+        break;
+    default:
+        break;
+    }
+}
+
+void handleMove(RecvPacket& packet) {
+    packet.body
 }
