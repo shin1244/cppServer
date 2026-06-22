@@ -6,14 +6,17 @@
 #include <unordered_map>
 #include <stack>
 #include <atomic>
+#include <chrono>
 #include"RingBuffer.h"
 #include"DoubleBuffer.h"
+#include"Player.h"
 
 #pragma pack(push, 1)
-struct PacketHeader {
-    unsigned short size; 
-    unsigned short id;  
-};
+struct PacketHeader { unsigned short size; unsigned short id; };
+
+struct MovePacket { PacketHeader h; int playerId; float x, y; };
+struct AttackPacket { PacketHeader h; int playerId; float dirX, dirY; int bulletId; };
+struct ConnectPacket { PacketHeader h; int playerId; };
 #pragma pack(pop)
 
 const int HEADER_SIZE = 4;
@@ -48,14 +51,10 @@ struct RecvPacket {
     std::vector<char> body;
 };
 
-struct SendPacket
-{
-    std::vector<char> data;
-};
-
 constexpr float PLAYER_SPEED = 30.0f;
 HANDLE g_iocp;   // IOCP 핸들
 Session g_sessionList[1000];
+Player g_playerList[1000];
 std::stack<int> g_freeIndices;
 DoubleBuffer<RecvPacket> g_recvQueue;
 
@@ -65,6 +64,10 @@ void flushSend(Session*);
 void initPool();
 int allocSession();
 void freeSession(int index);
+void broadcast(const char*, int);
+void handlePacket(RecvPacket&);
+void handleMove(RecvPacket&);
+void handleConnect(RecvPacket&);
 
 
 // 워커 스레드: 완료 큐를 계속 기다림
@@ -149,8 +152,14 @@ void Accepter(SOCKET s) {
         Session* session = &g_sessionList[index];
 
         session->socket = clientSocket;
+        session->index = index;
 
         CreateIoCompletionPort((HANDLE)clientSocket, g_iocp, (ULONG_PTR)session, 0);
+
+        RecvPacket rp;
+        rp.sessionIndex = index;
+        rp.id = PacketId::Connect;
+        g_recvQueue.Push(rp);
 
         postRecv(session);
     }
@@ -199,14 +208,20 @@ int main() {
         std::thread(workerThread).detach();
     std::thread (Accepter, listenSocket).detach();
 
-    // 메인루프 시작
+    constexpr int   TICK_MS = 33;    
+    constexpr float TICK_DT = TICK_MS / 1000.0f;
+
+    // 메인 루프 시작
     std::vector<RecvPacket> buffer;
     while (true) {
+        auto tickStart = std::chrono::steady_clock::now();
+
         buffer.clear();
         g_recvQueue.Swap(buffer);
         for (auto& packet : buffer) {
             handlePacket(packet);
         }
+        std::this_thread::sleep_until(tickStart + std::chrono::milliseconds(TICK_MS));
     }
     
     WSACleanup();
@@ -300,11 +315,39 @@ void handlePacket(RecvPacket& packet) {
     case PacketId::Move:
         handleMove(packet);
         break;
+    case PacketId::Connect:
+        handleConnect(packet);
+        break;
     default:
         break;
     }
 }
 
 void handleMove(RecvPacket& packet) {
-    packet.body
+    packet.body;
+}
+
+void handleConnect(RecvPacket& packet) {
+    int idx = packet.sessionIndex;
+    g_playerList[idx].Init(idx);
+
+    ConnectPacket cp;
+    cp.h.size = sizeof(ConnectPacket);
+    cp.h.id = static_cast<unsigned short>(PacketId::Connect);
+    cp.playerId = idx;
+
+    broadcast((const char*)&cp, sizeof(cp));
+}
+
+void broadcast(const char* data, int len) {
+    for (int i = 0; i < 1000; i++) {
+        Player& target = g_playerList[i];
+        if (!target.IsActive()) continue;
+
+        Session* s = &g_sessionList[i];
+        s->sendLock.lock();
+        s->sendBuffer.Write(data, len);
+        flushSend(s);
+        s->sendLock.unlock();
+    }
 }

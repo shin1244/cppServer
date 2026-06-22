@@ -2,17 +2,25 @@
 
 class Player {
 private:
-    int sessionIndex;
-    float x, y;
+    int sessionIndex = -1;
+    float x = 0, y = 0;
+    bool active = false;
 
 public:
-    Player(int sessionIdx) : sessionIndex(sessionIdx), x(0), y(0) {}
+    void Init(int sessionIdx) {
+        sessionIndex = sessionIdx;
+        x = 0;
+        y = 0;
+        active = true;
+    }
 
     void Move(float dx, float dy) {
         x += dx;
         y += dy;
     }
 
-    float GetX() const { return x; }
-    float GetY() const { return y; }
+    bool IsActive() { return active; }
+
+    //float GetX() const { return x; }
+    //float GetY() const { return y; }
 };
