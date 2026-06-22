@@ -124,10 +124,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="NetworkCore.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DoubleBuffer.h" />
+    <ClInclude Include="NetworkCore.h" />
     <ClInclude Include="Player.h" />
+    <ClInclude Include="Protocol.h" />
     <ClInclude Include="RingBuffer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
