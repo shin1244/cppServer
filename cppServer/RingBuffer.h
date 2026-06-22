@@ -21,7 +21,10 @@ public:
         }
     }
     int GetLinearUsedSize() {
-        if (head < tail) {
+        if (head == tail) {
+            return 0;
+        }
+        else if (head < tail) {
             return tail - head;
         }
         else {
@@ -70,5 +73,4 @@ public:
         OnWrite(len);
         return true;
     }
-
 };

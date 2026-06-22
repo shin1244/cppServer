@@ -78,7 +78,7 @@ void workerThread() {
                 PacketHeader header;
                 session->recvBuffer.Peek((char*)&header, HEADER_SIZE);
 
-                std::cout << "header\n";
+                std::cout << "header: " << header.size << "bytes\n";
 
                 if (session->recvBuffer.GetUsedSize() < header.size) break;
 
@@ -177,7 +177,7 @@ void postRecv(Session* session)
 {
     ZeroMemory(&session->recvOverlapped, sizeof(session->recvOverlapped));
     session->recvWsaBuf.buf = session->recvBuffer.GetWriteBuffer();
-    session->recvWsaBuf.len = session->recvBuffer.GetFreeSize();
+    session->recvWsaBuf.len = session->recvBuffer.GetLinearFreeSize();
     
     DWORD flags = 0;
     DWORD byteRecv = 0;
