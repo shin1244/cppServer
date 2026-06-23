@@ -7,15 +7,12 @@
 #include <chrono>
 #include"RingBuffer.h"
 #include"DoubleBuffer.h"
-#include"Player.h"
 #include"Protocol.h"
 #include"NetworkCore.h"
-#include"Bullet.h"
+#include"GameRoom.h"
 
 HANDLE g_iocp;   // IOCP วฺต้
-Session g_sessionList[1000];
-Player g_playerList[1000];
-Bullet g_bulletList[1000];
+
 std::stack<int> g_freeIndices;
 DoubleBuffer<RecvPacket> g_recvQueue;
 
@@ -85,59 +82,6 @@ int main() {
             handlePacket(packet);
         }
 
-        for (int i = 0; i < 1000; i++) {
-            if (!g_playerList[i].IsActive()) continue;
-            g_playerList[i].Update(TICK_DT);
-        }
-
-        for (int i = 0; i < 1000; i++) {
-            if (!g_bulletList[i].IsActive()) continue;
-            g_bulletList[i].Update(TICK_DT);
-        }
-
-        for (int i = 0; i < 1000; i++) {
-            if (!g_playerList[i].IsActive()) continue;
-
-            for (int j = 0; j < 1000; j++) {
-                if (!g_bulletList[j].IsActive()) continue;
-                if (i == g_bulletList[j].GetOwnerId()) continue;
-
-                float dx = g_playerList[i].GetX() - g_bulletList[j].GetX();
-                float dy = g_playerList[i].GetY() - g_bulletList[j].GetY();
-
-                float hitRadius = 14.0f;
-                float distSq = dx * dx + dy * dy;
-
-                if (distSq <= hitRadius * hitRadius) {
-                    std::cout << "KILL!!" << "\n";
-                    g_bulletList[j].Clear();
-                }
-            }
-        }
-
-        for (int i = 0; i < 1000; i++) {
-            if (!g_playerList[i].IsActive()) continue;
-            MovePacket mp;
-            mp.h.size = sizeof(MovePacket);
-            mp.h.id = static_cast<unsigned short>(PacketId::Move);
-            mp.playerId = i;
-            mp.x = g_playerList[i].GetX();
-            mp.y = g_playerList[i].GetY();
-            broadcast((const char*)&mp, sizeof(mp));
-        }
-
-        for (int i = 0; i < 1000; i++) {
-            if (!g_bulletList[i].IsActive()) continue;
-            BulletMovePacket bp;
-            bp.h.size = sizeof(BulletMovePacket);
-            bp.h.id = static_cast<unsigned short>(PacketId::Attack);
-            bp.bulletId = i;
-            bp.ownerId = g_bulletList[i].GetOwnerId();
-            bp.x = g_bulletList[i].GetX();
-            bp.y = g_bulletList[i].GetY();
-            broadcast((const char*)&bp, sizeof(bp));
-        }
-
         std::this_thread::sleep_until(tickStart + std::chrono::milliseconds(TICK_MS));
     }
     
@@ -167,12 +111,12 @@ void handlePacket(RecvPacket& packet) {
 void handleMove(RecvPacket& packet) {
     if (packet.body.size() < 1) return;
     unsigned char keys = static_cast<unsigned char>(packet.body[0]);
-    g_playerList[packet.sessionIndex].SetKeys(keys);
+    playerList[packet.sessionIndex].SetKeys(keys);
 }
 
 void handleConnect(RecvPacket& packet) {
     int idx = packet.sessionIndex;
-    g_playerList[idx].Init(idx);
+    playerList[idx].Init(idx);
 
     ConnectPacket cp;
     cp.h.size = sizeof(ConnectPacket);
@@ -186,7 +130,7 @@ void handleDisconnect(RecvPacket& packet) {
     int idx = packet.sessionIndex;
 
     closesocket(g_sessionList[idx].socket);
-    g_playerList[idx].Clear();
+    playerList[idx].Clear();
 
     DisconnectPacket dp;
     dp.h.size = sizeof(DisconnectPacket);
@@ -210,12 +154,12 @@ void handleAttack(RecvPacket& packet) {
     int ownerId = packet.sessionIndex;
 
     for (int i = 0; i < 1000; i++) {
-        if (g_bulletList[i].IsActive()) continue;
+        if (bulletList[i].IsActive()) continue;
 
-        g_bulletList[i].Fire(
+        bulletList[i].Fire(
             ownerId,
-            g_playerList[ownerId].GetX(),
-            g_playerList[ownerId].GetY(),
+            playerList[ownerId].GetX(),
+            playerList[ownerId].GetY(),
             dirX,
             dirY
         );
@@ -224,18 +168,5 @@ void handleAttack(RecvPacket& packet) {
             << " bullet=" << i
             << " dir=(" << dirX << ", " << dirY << ")\n";
         break;
-    }
-}
-
-void broadcast(const char* data, int len) {
-    for (int i = 0; i < 1000; i++) {
-        Player& target = g_playerList[i];
-        if (!target.IsActive()) continue;
-
-        Session* s = &g_sessionList[i];
-        s->sendLock.lock();
-        s->sendBuffer.Write(data, len);
-        flushSend(s);
-        s->sendLock.unlock();
     }
 }

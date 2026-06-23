@@ -123,12 +123,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="GameRoom.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="NetworkCore.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Bullet.h" />
     <ClInclude Include="DoubleBuffer.h" />
+    <ClInclude Include="GameRoom.h" />
     <ClInclude Include="NetworkCore.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="Protocol.h" />

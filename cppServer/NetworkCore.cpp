@@ -181,3 +181,14 @@ int allocSession() {
 void freeSession(int index) {
     g_freeIndices.push(index);
 }
+
+void broadcast(const char* data, int len) {
+    for (int i = 0; i < 1000; i++) {
+        if (!g_sessionList[i].connected) continue;
+        Session* s = &g_sessionList[i];
+        s->sendLock.lock();
+        s->sendBuffer.Write(data, len);
+        flushSend(s);
+        s->sendLock.unlock();
+    }
+}

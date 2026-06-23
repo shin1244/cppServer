@@ -22,6 +22,8 @@ struct Session {
     OVERLAPPED sendOverlapped;
     WSABUF recvWsaBuf;
     WSABUF sendWsaBuf;
+
+    bool connected;
 };
 
 extern HANDLE g_iocp;
