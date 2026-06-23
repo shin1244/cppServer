@@ -1,13 +1,11 @@
 #pragma once
-
-constexpr float PLAYER_SPEED = 300.0f;
-
 class Player {
 private:
     int sessionIndex = -1;
     float x = 0, y = 0;
     bool active = false;
     unsigned char keys = 0;
+    float PLAYER_SPEED = 300.0f;
 
 public:
     void Init(int sessionIdx) {
