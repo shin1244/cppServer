@@ -11,7 +11,6 @@
 #include"Protocol.h"
 #include"NetworkCore.h"
 
-constexpr float PLAYER_SPEED = 30.0f;
 HANDLE g_iocp;   // IOCP 핸들
 Session g_sessionList[1000];
 Player g_playerList[1000];
@@ -21,8 +20,11 @@ DoubleBuffer<RecvPacket> g_recvQueue;
 
 void broadcast(const char*, int);
 void handlePacket(RecvPacket&);
-void handleMove(RecvPacket&);
+
 void handleConnect(RecvPacket&);
+void handleDisconnect(RecvPacket&);
+void handleMove(RecvPacket&);
+
 
 
 int main() {
@@ -81,6 +83,32 @@ int main() {
         for (auto& packet : buffer) {
             handlePacket(packet);
         }
+
+        for (int i = 0; i < 1000; i++) {
+            if (!g_playerList[i].IsActive()) continue;
+
+            g_playerList[i].Update(TICK_DT);
+
+            // 보낼 패킷 만들기
+            MovePacket mp;
+            mp.h.size = sizeof(MovePacket);
+            mp.h.id = static_cast<unsigned short>(PacketId::Move);
+            mp.playerId = i;
+            mp.x = g_playerList[i].GetX();
+            mp.y = g_playerList[i].GetY();
+        }
+
+        for (int i = 0; i < 1000; i++) {
+            if (!g_playerList[i].IsActive()) continue;
+            MovePacket mp;
+            mp.h.size = sizeof(MovePacket);
+            mp.h.id = static_cast<unsigned short>(PacketId::Move);
+            mp.playerId = i;
+            mp.x = g_playerList[i].GetX();
+            mp.y = g_playerList[i].GetY();
+            broadcast((const char*)&mp, sizeof(mp));
+        }
+
         std::this_thread::sleep_until(tickStart + std::chrono::milliseconds(TICK_MS));
     }
     
@@ -97,13 +125,18 @@ void handlePacket(RecvPacket& packet) {
     case PacketId::Connect:
         handleConnect(packet);
         break;
+    case PacketId::Disconnect:
+        handleDisconnect(packet);
+        break;
     default:
         break;
     }
 }
 
 void handleMove(RecvPacket& packet) {
-    packet.body;
+    if (packet.body.size() < 1) return;
+    unsigned char keys = static_cast<unsigned char>(packet.body[0]);
+    g_playerList[packet.sessionIndex].SetKeys(keys);
 }
 
 void handleConnect(RecvPacket& packet) {
@@ -118,6 +151,23 @@ void handleConnect(RecvPacket& packet) {
     broadcast((const char*)&cp, sizeof(cp));
 }
 
+void handleDisconnect(RecvPacket& packet) {
+    int idx = packet.sessionIndex;
+
+    closesocket(g_sessionList[idx].socket);
+    g_playerList[idx].Clear();
+
+    DisconnectPacket dp;
+    dp.h.size = sizeof(DisconnectPacket);
+    dp.h.id = static_cast<unsigned short>(PacketId::Disconnect);
+    dp.playerId = idx;
+
+    broadcast((const char*)&dp, sizeof(dp));
+
+
+    freeSession(idx);
+}
+
 void broadcast(const char* data, int len) {
     for (int i = 0; i < 1000; i++) {
         Player& target = g_playerList[i];
@@ -130,3 +180,4 @@ void broadcast(const char* data, int len) {
         s->sendLock.unlock();
     }
 }
+

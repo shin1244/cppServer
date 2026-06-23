@@ -19,13 +19,21 @@ void workerThread() {
         Session* session = (Session*)completionKey;
 
         if (!ok) {
-            freeSession(session->index);
-            closesocket(session->socket);
+
+
             std::cout << "[session " << session->socket << "] Disconnect\n";
             continue;
         }
 
         if (overlapped == &session->recvOverlapped) {
+            if (bytesTransferred == 0) {
+                RecvPacket recvPacket;
+                recvPacket.sessionIndex = session->index;
+                recvPacket.id = PacketId::Disconnect;
+                g_recvQueue.Push(std::move(recvPacket));
+
+                continue;
+            }
             session->recvBuffer.OnWrite(bytesTransferred);
 
             while (true) {
@@ -33,8 +41,6 @@ void workerThread() {
 
                 PacketHeader header;
                 session->recvBuffer.Peek((char*)&header, HEADER_SIZE);
-
-                std::cout << "header: " << header.size << "bytes\n";
 
                 if (session->recvBuffer.GetUsedSize() < header.size) break;
 
@@ -53,7 +59,6 @@ void workerThread() {
         }
         else if (overlapped == &session->sendOverlapped) {
             session->sendLock.lock();
-            std::cout << "[worker] sent " << bytesTransferred << " bytes\n";
             session->sendBuffer.OnRead(bytesTransferred);
             session->sendPending = false;
             flushSend(session);
