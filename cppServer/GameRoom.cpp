@@ -1,25 +1,42 @@
 #include"GameRoom.h"
 
+void GameRoom::Init() {
+    playerList[0].SetHome(300, 0, 600, 300);
+    playerList[1].SetHome(300, 600, 600, 900);
+    playerList[2].SetHome(0, 300, 300, 600);
+    playerList[3].SetHome(600, 300, 900, 600);
+}
+
+void GameRoom::Update(float dt) {
+    UpdatePlayers(dt);   // 1. 입력(keys)대로 이동
+    UpdateBullets(dt);   // 2. 총알 전진
+    CheckBulletHits();   // 3. (플레이어·총알 위치 확정된 뒤) 피격 판정
+    BroadcastState();    // 4. 최종 상태를 클라에 전송
+}
 
 void GameRoom::UpdatePlayers(float dt) {
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < MAX_SEATS; i++) {
         if (!playerList[i].IsActive()) continue;
         playerList[i].Update(dt);
     }
 }
 
 void GameRoom::UpdateBullets(float dt) {
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bulletList[i].IsActive()) continue;
         bulletList[i].Update(dt);
+        if (bulletList[i].GetX() > 900 || bulletList[i].GetX() < 0
+            || bulletList[i].GetY() > 900 || bulletList[i].GetY() < 0) {
+            RemoveBullet(i);
+        }
     }
 }
 
 void GameRoom::CheckBulletHits() {
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < MAX_SEATS; i++) {
         if (!playerList[i].IsActive()) continue;
 
-        for (int j = 0; j < 1000; j++) {
+        for (int j = 0; j < MAX_BULLETS; j++) {
             if (!bulletList[j].IsActive()) continue;
             if (i == bulletList[j].GetOwnerId()) continue;
 
@@ -31,14 +48,14 @@ void GameRoom::CheckBulletHits() {
 
             if (distSq <= hitRadius * hitRadius) {
                 std::cout << "KILL!!" << "\n";
-                bulletList[j].Clear();
+                RemoveBullet(j);
             }
         }
     }
 }
 
 void GameRoom::BroadcastState() {
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < MAX_SEATS; i++) {
         if (!playerList[i].IsActive()) continue;
         MovePacket mp;
         mp.h.size = sizeof(MovePacket);
@@ -46,10 +63,10 @@ void GameRoom::BroadcastState() {
         mp.playerId = i;
         mp.x = playerList[i].GetX();
         mp.y = playerList[i].GetY();
-        broadcast((const char*)&mp, sizeof(mp));
+        Broadcast((const char*)&mp, sizeof(mp));
     }
 
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bulletList[i].IsActive()) continue;
         BulletMovePacket bp;
         bp.h.size = sizeof(BulletMovePacket);
@@ -58,6 +75,131 @@ void GameRoom::BroadcastState() {
         bp.ownerId = bulletList[i].GetOwnerId();
         bp.x = bulletList[i].GetX();
         bp.y = bulletList[i].GetY();
-        broadcast((const char*)&bp, sizeof(bp));
+        Broadcast((const char*)&bp, sizeof(bp));
     }
+}
+
+void GameRoom::HandleConnect(RecvPacket& packet) {
+    int seat = FindEmptySeat();
+    if (seat == -1) return;
+
+    int idx = packet.sessionIndex;
+    seats[seat] = idx;
+    playerList[seat].Init(idx);
+
+    ConnectPacket cp;
+    cp.h.size = sizeof(ConnectPacket);
+    cp.h.id = static_cast<unsigned short>(PacketId::Connect);
+    cp.playerId = seat;
+
+    Broadcast((const char*)&cp, sizeof(cp));
+}
+
+void GameRoom::HandleDisconnect(RecvPacket& packet) {
+    int idx = packet.sessionIndex;
+
+    int seat = FindSeatBySession(idx);
+    if (seat == -1) return;
+
+    seats[seat] = -1;
+    playerList[seat].Clear();
+
+    DisconnectPacket dp;
+    dp.h.size = sizeof(DisconnectPacket);
+    dp.h.id = static_cast<unsigned short>(PacketId::Disconnect);
+    dp.playerId = seat;
+
+    Broadcast((const char*)&dp, sizeof(dp));
+}
+
+void GameRoom::HandleMove(RecvPacket& packet) {
+    if (packet.body.size() < 1) return;
+    unsigned char keys = static_cast<unsigned char>(packet.body[0]);
+    int seat = FindSeatBySession(packet.sessionIndex);
+    playerList[seat].SetKeys(keys);
+}
+
+void GameRoom::HandleAttack(RecvPacket& packet) {
+    if (packet.body.size() < sizeof(float) * 2) return;
+
+    float dirX;
+    float dirY;
+
+    memcpy(&dirX, packet.body.data(), sizeof(float));
+    memcpy(&dirY, packet.body.data() + sizeof(float), sizeof(float));
+
+    int seat = FindSeatBySession(packet.sessionIndex);
+
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        if (bulletList[i].IsActive()) continue;
+
+        bulletList[i].Fire(
+            seat,
+            playerList[seat].GetX(),
+            playerList[seat].GetY(),
+            dirX,
+            dirY
+        );
+
+        std::cout << "Bullet fired owner=" << seat
+            << " bullet=" << i
+            << " dir=(" << dirX << ", " << dirY << ")\n";
+        break;
+    }
+}
+
+void GameRoom::HandlePacket(RecvPacket& packet) {
+    switch (packet.id)
+    {
+    case PacketId::Move:
+        HandleMove(packet);
+        break;
+    case PacketId::Connect:
+        HandleConnect(packet);
+        break;
+    case PacketId::Disconnect:
+        HandleDisconnect(packet);
+        break;
+    case PacketId::Attack:
+        HandleAttack(packet);
+        break;
+    default:
+        break;
+    }
+}
+
+int GameRoom::FindEmptySeat() {
+    for (int i = 0; i < MAX_SEATS; ++i) {
+        if (seats[i] == -1) return i;
+    }
+    return -1;
+}
+
+int GameRoom::FindSeatBySession(int sessionIndex) {
+    for (int i = 0; i < MAX_SEATS; ++i) {
+        if (seats[i] == sessionIndex) return i;
+    }
+    return -1;
+}
+
+void GameRoom::Broadcast(const char* packet, int len) {
+    for (int i = 0; i < MAX_SEATS; ++i) {
+        if (!playerList[i].IsActive()) continue;
+        int idx = seats[i];
+        Session* s = &g_sessionList[idx];
+
+        s->sendLock.lock();
+        s->sendBuffer.Write(packet, len);
+        flushSend(s);
+        s->sendLock.unlock();
+    }
+}
+
+void GameRoom::RemoveBullet(int i) {
+    bulletList[i].Clear();
+    RemovePacket rp;
+    rp.h.size = sizeof(rp);
+    rp.h.id = (unsigned short)PacketId::Remove;
+    rp.bulletId = i;
+    Broadcast((const char*)&rp, sizeof(rp));
 }

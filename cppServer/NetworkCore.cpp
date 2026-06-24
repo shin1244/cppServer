@@ -1,7 +1,10 @@
 #include"NetworkCore.h"
 #include"Protocol.h"
 
-// 워커 스레드: 완료 큐를 계속 기다림
+Session g_sessionList[1000];
+std::stack<int> g_freeIndices;
+DoubleBuffer<RecvPacket> g_recvQueue;
+
 void workerThread() {
     while (true) {
         DWORD bytesTransferred = 0;
@@ -180,15 +183,4 @@ int allocSession() {
 
 void freeSession(int index) {
     g_freeIndices.push(index);
-}
-
-void broadcast(const char* data, int len) {
-    for (int i = 0; i < 1000; i++) {
-        if (!g_sessionList[i].connected) continue;
-        Session* s = &g_sessionList[i];
-        s->sendLock.lock();
-        s->sendBuffer.Write(data, len);
-        flushSend(s);
-        s->sendLock.unlock();
-    }
 }

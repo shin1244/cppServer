@@ -135,6 +135,7 @@
     <ClInclude Include="Player.h" />
     <ClInclude Include="Protocol.h" />
     <ClInclude Include="RingBuffer.h" />
+    <ClInclude Include="User.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

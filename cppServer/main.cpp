@@ -13,18 +13,6 @@
 
 HANDLE g_iocp;   // IOCP วฺต้
 
-std::stack<int> g_freeIndices;
-DoubleBuffer<RecvPacket> g_recvQueue;
-
-
-void broadcast(const char*, int);
-void handlePacket(RecvPacket&);
-
-void handleConnect(RecvPacket&);
-void handleDisconnect(RecvPacket&);
-void handleMove(RecvPacket&);
-void handleAttack(RecvPacket&);
-
 int main() {
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -68,6 +56,9 @@ int main() {
         std::thread(workerThread).detach();
     std::thread (Accepter, listenSocket).detach();
 
+    GameRoom gameRoom;
+    gameRoom.Init();
+
     constexpr int   TICK_MS = 33;    
     constexpr float TICK_DT = TICK_MS / 1000.0f;
 
@@ -79,94 +70,13 @@ int main() {
         buffer.clear();
         g_recvQueue.Swap(buffer);
         for (auto& packet : buffer) {
-            handlePacket(packet);
+            gameRoom.HandlePacket(packet);
         }
+        gameRoom.Update(TICK_DT);
 
         std::this_thread::sleep_until(tickStart + std::chrono::milliseconds(TICK_MS));
     }
     
     WSACleanup();
     return 0;
-}
-
-void handlePacket(RecvPacket& packet) {
-    switch (packet.id)
-    {
-    case PacketId::Move:
-        handleMove(packet);
-        break;
-    case PacketId::Connect:
-        handleConnect(packet);
-        break;
-    case PacketId::Disconnect:
-        handleDisconnect(packet);
-        break;
-    case PacketId::Attack:
-        handleAttack(packet);
-    default:
-        break;
-    }
-}
-
-void handleMove(RecvPacket& packet) {
-    if (packet.body.size() < 1) return;
-    unsigned char keys = static_cast<unsigned char>(packet.body[0]);
-    playerList[packet.sessionIndex].SetKeys(keys);
-}
-
-void handleConnect(RecvPacket& packet) {
-    int idx = packet.sessionIndex;
-    playerList[idx].Init(idx);
-
-    ConnectPacket cp;
-    cp.h.size = sizeof(ConnectPacket);
-    cp.h.id = static_cast<unsigned short>(PacketId::Connect);
-    cp.playerId = idx;
-
-    broadcast((const char*)&cp, sizeof(cp));
-}
-
-void handleDisconnect(RecvPacket& packet) {
-    int idx = packet.sessionIndex;
-
-    closesocket(g_sessionList[idx].socket);
-    playerList[idx].Clear();
-
-    DisconnectPacket dp;
-    dp.h.size = sizeof(DisconnectPacket);
-    dp.h.id = static_cast<unsigned short>(PacketId::Disconnect);
-    dp.playerId = idx;
-
-    broadcast((const char*)&dp, sizeof(dp));
-
-    freeSession(idx);
-}
-
-void handleAttack(RecvPacket& packet) {
-    if (packet.body.size() < sizeof(float) * 2) return;
-
-    float dirX;
-    float dirY;
-     
-    memcpy(&dirX, packet.body.data(), sizeof(float));
-    memcpy(&dirY, packet.body.data() + sizeof(float), sizeof(float));
-
-    int ownerId = packet.sessionIndex;
-
-    for (int i = 0; i < 1000; i++) {
-        if (bulletList[i].IsActive()) continue;
-
-        bulletList[i].Fire(
-            ownerId,
-            playerList[ownerId].GetX(),
-            playerList[ownerId].GetY(),
-            dirX,
-            dirY
-        );
-
-        std::cout << "Bullet fired owner=" << ownerId
-            << " bullet=" << i
-            << " dir=(" << dirX << ", " << dirY << ")\n";
-        break;
-    }
 }
