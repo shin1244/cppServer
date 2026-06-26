@@ -73,7 +73,6 @@ int main() {
             gameRoom.HandlePacket(packet);
         }
         gameRoom.Update(TICK_DT);
-
         std::this_thread::sleep_until(tickStart + std::chrono::milliseconds(TICK_MS));
     }
     

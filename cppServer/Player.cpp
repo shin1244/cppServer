@@ -38,7 +38,10 @@ void Player::Move(float dx, float dy) {
     y += dy;
 }
 
-void Player::SetPos(float nx, float ny) { x = nx; y = ny; }
+void Player::SetPos(float nx, float ny) { 
+    x = nx; 
+    y = ny; 
+}
 
 void Player::SetHome(float minX, float minY, float maxX, float maxY) {
     homeMinX = minX; homeMinY = minY;
