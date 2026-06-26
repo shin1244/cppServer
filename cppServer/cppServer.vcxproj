@@ -123,9 +123,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Bullet.cpp" />
     <ClCompile Include="GameRoom.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="NetworkCore.cpp" />
+    <ClCompile Include="Player.cpp" />
+    <ClCompile Include="RingBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Bullet.h" />

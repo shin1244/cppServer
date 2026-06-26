@@ -9,31 +9,12 @@ private:
     float dirX = 0;
     float dirY = 0;
     float speed = 700.0f;
-
 public:
-    void Fire(int owner, float startX, float startY, float dx, float dy) {
-        active = true;
-        ownerId = owner;
-        x = startX;
-        y = startY;
-        dirX = dx;
-        dirY = dy;
-    }
-
-    void Update(float dt) {
-        if (!active) return;
-
-        x += dirX * speed * dt;
-        y += dirY * speed * dt;
-    }
-
-    void Clear() {
-        active = false;
-        ownerId = -1;
-    }
-
-    bool IsActive() const { return active; }
-    int GetOwnerId() const { return ownerId; }
-    float GetX() const { return x; }
-    float GetY() const { return y; }
+    void Fire(int owner, float startX, float startY, float dx, float dy);
+    void Update(float dt);
+    void Clear();
+    bool IsActive() const;
+    int GetOwnerId() const;
+    float GetX() const;
+    float GetY() const;
 };
