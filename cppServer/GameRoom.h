@@ -34,4 +34,7 @@ private:
     int seats[MAX_SEATS] = { -1, -1, -1, -1 };
 
     Bullet bulletList[64];
+
+	bool IsVisible(int receiverSeat, float targetX, float targetY);
+    void SendStateToPlayer(int receiverSeat);
 };

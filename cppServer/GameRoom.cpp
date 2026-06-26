@@ -8,10 +8,11 @@ void GameRoom::Init() {
 }
 
 void GameRoom::Update(float dt) {
-    UpdatePlayers(dt);   // 1. ÀÔ·Â(keys)´ë·Î ÀÌµ¿
-    UpdateBullets(dt);   // 2. ÃÑ¾Ë ÀüÁø
-    CheckBulletHits();   // 3. (ÇÃ·¹ÀÌ¾î¡¤ÃÑ¾Ë À§Ä¡ È®Á¤µÈ µÚ) ÇÇ°Ý ÆÇÁ¤
-    BroadcastState();    // 4. ÃÖÁ¾ »óÅÂ¸¦ Å¬¶ó¿¡ Àü¼Û
+    UpdatePlayers(dt);   // 1. ï¿½Ô·ï¿½(keys)ï¿½ï¿½ï¿½ ï¿½Ìµï¿½
+    UpdateBullets(dt);   // 2. ï¿½Ñ¾ï¿½ ï¿½ï¿½ï¿½ï¿½
+    CheckBulletHits();   // 3. (ï¿½Ã·ï¿½ï¿½Ì¾î¡¤ï¿½Ñ¾ï¿½ ï¿½ï¿½Ä¡ È®ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½) ï¿½Ç°ï¿½ ï¿½ï¿½ï¿½ï¿½
+    //BroadcastState();    // 4. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Â¸ï¿½ Å¬ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
+    for (int i = 0; i < MAX_SEATS; i++) SendStateToPlayer(i);
 }
 
 void GameRoom::UpdatePlayers(float dt) {
@@ -202,4 +203,84 @@ void GameRoom::RemoveBullet(int i) {
     rp.h.id = (unsigned short)PacketId::Remove;
     rp.bulletId = i;
     Broadcast((const char*)&rp, sizeof(rp));
+}
+
+bool GameRoom::IsVisible(int receiverSeat, float targetX, float targetY) {
+    if (playerList[receiverSeat].IsInHomeZone(targetX, targetY))
+        return true;
+
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        if (!bulletList[i].IsActive()) continue;
+		if (bulletList[i].GetOwnerId() != receiverSeat) continue;
+        float dx = targetX - bulletList[i].GetX();
+        float dy = targetY - bulletList[i].GetY();
+        if (abs(dx) < 100 && abs(dy) < 100)
+            return true;
+    }
+    return false;
+}
+
+void GameRoom::SendStateToPlayer(int receiverSeat) {
+    if (!playerList[receiverSeat].IsActive()) return;
+    int idx = seats[receiverSeat];
+    Session* s = &g_sessionList[idx];
+
+    for (int i = 0; i < MAX_SEATS; i++) {
+        if (!playerList[i].IsActive()) continue;
+        if (IsVisible(receiverSeat, playerList[i].GetX(), playerList[i].GetY())) {
+            MovePacket mp;
+
+            mp.h.size = sizeof(MovePacket);
+            mp.h.id = static_cast<unsigned short>(PacketId::Move);
+            mp.playerId = i;
+            mp.x = playerList[i].GetX();
+            mp.y = playerList[i].GetY();
+
+            s->sendLock.lock();
+            s->sendBuffer.Write((const char*)&mp, mp.h.size);
+            flushSend(s);
+            s->sendLock.unlock();
+        }
+        else {
+            std::cout << "receiver=" << receiverSeat << " hides player=" << i << "\n";
+            HidePlayerPacket hpp;
+            hpp.h.size = sizeof(HidePlayerPacket);
+            hpp.h.id = static_cast<unsigned short>(PacketId::HidePlayer);
+            hpp.playerId = i;
+
+            s->sendLock.lock();
+            s->sendBuffer.Write((const char*)&hpp, hpp.h.size);
+            flushSend(s);
+            s->sendLock.unlock();
+        }
+    }
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        if (!bulletList[i].IsActive()) continue;
+        if (IsVisible(receiverSeat, bulletList[i].GetX(), bulletList[i].GetY())) {
+
+            BulletMovePacket bp;
+            bp.h.size = sizeof(BulletMovePacket);
+            bp.h.id = static_cast<unsigned short>(PacketId::Attack);
+            bp.bulletId = i;
+            bp.ownerId = bulletList[i].GetOwnerId();
+            bp.x = bulletList[i].GetX();
+            bp.y = bulletList[i].GetY();
+
+            s->sendLock.lock();
+            s->sendBuffer.Write((const char*)&bp, bp.h.size);
+            flushSend(s);
+            s->sendLock.unlock();
+        }
+        else {
+            HideBulletPacket hbp;
+            hbp.h.size = sizeof(HideBulletPacket);
+            hbp.h.id = static_cast<unsigned short>(PacketId::HideBullet);
+            hbp.bulletId = i;
+
+            s->sendLock.lock();
+            s->sendBuffer.Write((const char*)&hbp, hbp.h.size);
+            flushSend(s);
+            s->sendLock.unlock();
+        }
+    }
 }

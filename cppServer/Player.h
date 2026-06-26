@@ -36,4 +36,6 @@ public:
     float GetHomeMinY() const;
     float GetHomeMaxX() const;
     float GetHomeMaxY() const;
+
+    bool IsInHomeZone(float targetX, float targetY);
 };

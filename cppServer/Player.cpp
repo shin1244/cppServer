@@ -57,3 +57,8 @@ float Player::GetHomeMinX() const { return homeMinX; }
 float Player::GetHomeMinY() const { return homeMinY; }
 float Player::GetHomeMaxX() const { return homeMaxX; }
 float Player::GetHomeMaxY() const { return homeMaxY; }
+
+bool Player::IsInHomeZone(float targetX, float targetY) {
+    return (targetX >= homeMinX && targetX <= homeMaxX &&
+            targetY >= homeMinY && targetY <= homeMaxY);
+}

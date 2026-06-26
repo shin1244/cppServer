@@ -8,6 +8,8 @@ struct BulletMovePacket { PacketHeader h; int bulletId; int ownerId; float x;flo
 struct ConnectPacket { PacketHeader h; int playerId; };
 struct DisconnectPacket { PacketHeader h; int playerId;  };
 struct RemovePacket { PacketHeader h; int bulletId; };
+struct HidePlayerPacket { PacketHeader h; int playerId; };
+struct HideBulletPacket { PacketHeader h; int bulletId; };
 #pragma pack(pop)
 
 enum class PacketId : unsigned short {
@@ -16,6 +18,8 @@ enum class PacketId : unsigned short {
     Move,
     Attack,
     Remove,
+    HidePlayer,
+    HideBullet,
     Chat,
 };
 
