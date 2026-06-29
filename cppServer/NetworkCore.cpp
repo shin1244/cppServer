@@ -1,8 +1,8 @@
 #include"NetworkCore.h"
 #include"Protocol.h"
+#include"ObjectPool.h"
 
-Session g_sessionList[1000];
-std::stack<int> g_freeIndices;
+ObjectPool<Session, 1000> g_sessions;
 DoubleBuffer<RecvPacket> g_recvQueue;
 
 void workerThread() {
@@ -83,7 +83,7 @@ void Accepter(SOCKET s) {
         std::cout << "client connected! socket=" << clientSocket << "\n";
 
 
-        int index = allocSession();
+        int index = g_sessions.Alloc();
         if (index == -1) {
             closesocket(clientSocket);
             continue;
@@ -127,7 +127,7 @@ void postRecv(Session* session)
         int err = WSAGetLastError();
         if (err != WSA_IO_PENDING) {
             std::cout << "WSARecv failed: " << err << "\n";
-            freeSession(session->index);
+            g_sessions.Free(session->index);
             closesocket(session->socket);
         }
     }
@@ -156,7 +156,7 @@ void flushSend(Session* session) {
         if (err != WSA_IO_PENDING) {
             std::cout << "WSASend failed: " << err << "\n";
             session->sendPending = false;
-            freeSession(session->index);
+            g_sessions.Free(session->index);
             closesocket(session->socket);
         }
     }
@@ -167,20 +167,4 @@ void postSend(Session* session, const char* data, int len)
     session->sendBuffer.Write(data, len);
     std::cout << "Send: " << len << "\n";
     flushSend(session);
-}
-
-void initPool() {
-    for (int i = 999; i >= 0; i--)
-        g_freeIndices.push(i);
-}
-
-int allocSession() {
-    if (g_freeIndices.empty()) return -1;
-    int index = g_freeIndices.top();
-    g_freeIndices.pop();
-    return index;
-}
-
-void freeSession(int index) {
-    g_freeIndices.push(index);
 }

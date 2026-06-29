@@ -10,6 +10,7 @@
 #include"Protocol.h"
 #include"NetworkCore.h"
 #include"GameRoom.h"
+#include"User.h"
 
 HANDLE g_iocp;   // IOCP วฺต้
 
@@ -17,8 +18,6 @@ int main() {
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
     std::cout << "Winsock ready\n";
-
-    initPool();
 
     g_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
     if (g_iocp == NULL) {
@@ -70,7 +69,9 @@ int main() {
         buffer.clear();
         g_recvQueue.Swap(buffer);
         for (auto& packet : buffer) {
-            gameRoom.HandlePacket(packet);
+            User& user = g_users[packet.sessionIndex];
+            if (user.room != nullptr) 
+                gameRoom.HandlePacket(packet);
         }
         gameRoom.Update(TICK_DT);
         std::this_thread::sleep_until(tickStart + std::chrono::milliseconds(TICK_MS));

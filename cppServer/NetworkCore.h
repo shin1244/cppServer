@@ -36,6 +36,3 @@ void Accepter(SOCKET listenSocket);
 void postRecv(Session*);
 void postSend(Session*, const char*, int);
 void flushSend(Session*);
-void initPool();
-int allocSession();
-void freeSession(int index);

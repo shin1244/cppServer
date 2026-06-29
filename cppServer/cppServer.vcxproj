@@ -134,7 +134,9 @@
     <ClInclude Include="Bullet.h" />
     <ClInclude Include="DoubleBuffer.h" />
     <ClInclude Include="GameRoom.h" />
+    <ClInclude Include="Lobby.h" />
     <ClInclude Include="NetworkCore.h" />
+    <ClInclude Include="ObjectPool.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="Protocol.h" />
     <ClInclude Include="RingBuffer.h" />
