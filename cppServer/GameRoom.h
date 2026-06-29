@@ -20,7 +20,8 @@ private:
     void UpdatePlayers(float dt);
     void UpdateBullets(float dt);
     void CheckBulletHits();
-    void BroadcastState();
+    void BroadcastObserver();
+    void RemovePlayer(int i);
     void RemoveBullet(int i);
     void Broadcast(const char* packet, int len);
 

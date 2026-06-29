@@ -8,10 +8,10 @@ void GameRoom::Init() {
 }
 
 void GameRoom::Update(float dt) {
-    UpdatePlayers(dt);   // 1. �Է�(keys)��� �̵�
-    UpdateBullets(dt);   // 2. �Ѿ� ����
-    CheckBulletHits();   // 3. (�÷��̾�Ѿ� ��ġ Ȯ���� ��) �ǰ� ����
-    //BroadcastState();    // 4. ���� ���¸� Ŭ�� ����
+    UpdatePlayers(dt);
+    UpdateBullets(dt);
+    CheckBulletHits();
+    BroadcastState();
     for (int i = 0; i < MAX_SEATS; i++) SendStateToPlayer(i);
 }
 
@@ -48,16 +48,16 @@ void GameRoom::CheckBulletHits() {
             float distSq = dx * dx + dy * dy;
 
             if (distSq <= hitRadius * hitRadius) {
-                std::cout << "KILL!!" << "\n";
+                RemovePlayer(i);
                 RemoveBullet(j);
             }
         }
     }
 }
 
-void GameRoom::BroadcastState() {
+void GameRoom::BroadcastObserver() {
     for (int i = 0; i < MAX_SEATS; i++) {
-        if (!playerList[i].IsActive()) continue;
+        if (seats[i] == -1 || playerList[i].IsActive()) continue;
         MovePacket mp;
         mp.h.size = sizeof(MovePacket);
         mp.h.id = static_cast<unsigned short>(PacketId::Move);
@@ -103,14 +103,7 @@ void GameRoom::HandleDisconnect(RecvPacket& packet) {
     if (seat == -1) return;
 
     seats[seat] = -1;
-    playerList[seat].Clear();
-
-    DisconnectPacket dp;
-    dp.h.size = sizeof(DisconnectPacket);
-    dp.h.id = static_cast<unsigned short>(PacketId::Disconnect);
-    dp.playerId = seat;
-
-    Broadcast((const char*)&dp, sizeof(dp));
+    RemovePlayer(idx);
 }
 
 void GameRoom::HandleMove(RecvPacket& packet) {
@@ -122,14 +115,14 @@ void GameRoom::HandleMove(RecvPacket& packet) {
 
 void GameRoom::HandleAttack(RecvPacket& packet) {
     if (packet.body.size() < sizeof(float) * 2) return;
+    int seat = FindSeatBySession(packet.sessionIndex);
+    if (!playerList[seat].IsActive()) return;
 
     float dirX;
     float dirY;
 
     memcpy(&dirX, packet.body.data(), sizeof(float));
     memcpy(&dirY, packet.body.data() + sizeof(float), sizeof(float));
-
-    int seat = FindSeatBySession(packet.sessionIndex);
 
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (bulletList[i].IsActive()) continue;
@@ -185,7 +178,8 @@ int GameRoom::FindSeatBySession(int sessionIndex) {
 
 void GameRoom::Broadcast(const char* packet, int len) {
     for (int i = 0; i < MAX_SEATS; ++i) {
-        if (!playerList[i].IsActive()) continue;
+        if (!playerList[i].IsActive() && seats[i] == -1) continue;
+
         int idx = seats[i];
         Session* s = &g_sessionList[idx];
 
@@ -196,11 +190,20 @@ void GameRoom::Broadcast(const char* packet, int len) {
     }
 }
 
+void GameRoom::RemovePlayer(int i) {
+    playerList[i].Clear();
+    RemovePlayerPacket rp;
+    rp.h.size = sizeof(RemovePlayerPacket);
+    rp.h.id = static_cast<unsigned short>(PacketId::RemovePlayer);
+    rp.playerId = i;
+    Broadcast((const char*)&rp, sizeof(rp));
+}
+
 void GameRoom::RemoveBullet(int i) {
     bulletList[i].Clear();
-    RemovePacket rp;
+    RemoveBulletPacket rp;
     rp.h.size = sizeof(rp);
-    rp.h.id = (unsigned short)PacketId::Remove;
+    rp.h.id = (unsigned short)PacketId::RemoveBullet;
     rp.bulletId = i;
     Broadcast((const char*)&rp, sizeof(rp));
 }
@@ -242,7 +245,6 @@ void GameRoom::SendStateToPlayer(int receiverSeat) {
             s->sendLock.unlock();
         }
         else {
-            std::cout << "receiver=" << receiverSeat << " hides player=" << i << "\n";
             HidePlayerPacket hpp;
             hpp.h.size = sizeof(HidePlayerPacket);
             hpp.h.id = static_cast<unsigned short>(PacketId::HidePlayer);
