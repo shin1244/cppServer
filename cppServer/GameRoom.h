@@ -20,7 +20,6 @@ private:
     void UpdatePlayers(float dt);
     void UpdateBullets(float dt);
     void CheckBulletHits();
-    void BroadcastObserver();
     void RemovePlayer(int i);
     void RemoveBullet(int i);
     void Broadcast(const char* packet, int len);
@@ -38,4 +37,5 @@ private:
 
 	bool IsVisible(int receiverSeat, float targetX, float targetY);
     void SendStateToPlayer(int receiverSeat);
+    void SendStateToObserver(int receiverSeat);
 };
