@@ -1,9 +1,11 @@
 #pragma once
-class GameRoom;
+class World;
 
 struct User {
     int sessionIndex = -1;
-    GameRoom* room = nullptr;
+    World* room = nullptr;
     int seat = -1;
     bool inUse = false;
 };
+
+User g_users[1000];

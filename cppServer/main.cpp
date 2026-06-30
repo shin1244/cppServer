@@ -9,7 +9,7 @@
 #include"DoubleBuffer.h"
 #include"Protocol.h"
 #include"NetworkCore.h"
-#include"GameRoom.h"
+#include"World.h"
 #include"User.h"
 
 HANDLE g_iocp;   // IOCP วฺต้
@@ -55,9 +55,6 @@ int main() {
         std::thread(workerThread).detach();
     std::thread (Accepter, listenSocket).detach();
 
-    GameRoom gameRoom;
-    gameRoom.Init();
-
     constexpr int   TICK_MS = 33;    
     constexpr float TICK_DT = TICK_MS / 1000.0f;
 
@@ -69,11 +66,23 @@ int main() {
         buffer.clear();
         g_recvQueue.Swap(buffer);
         for (auto& packet : buffer) {
-            User& user = g_users[packet.sessionIndex];
-            if (user.room != nullptr) 
-                gameRoom.HandlePacket(packet);
+            if (packet.id == PacketId::Connect) {
+				g_users[packet.sessionIndex].inUse = true;
+				g_users[packet.sessionIndex].sessionIndex = packet.sessionIndex;
+                continue;
+            }
+			User& user = g_users[packet.sessionIndex];
+            if (user.room == nullptr) {
+                
+			}
+            else {
+                user.room->HandlePacket(packet);
+            }
         }
-        gameRoom.Update(TICK_DT);
+        for (auto& room : g_rooms) {
+            room.Update(TICK_DT);
+        }
+
         std::this_thread::sleep_until(tickStart + std::chrono::milliseconds(TICK_MS));
     }
     

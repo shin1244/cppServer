@@ -22,6 +22,7 @@ enum class PacketId : unsigned short {
     HidePlayer,
     HideBullet,
     Chat,
+    Join,
 };
 
 const int HEADER_SIZE = 4;

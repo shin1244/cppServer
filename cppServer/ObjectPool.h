@@ -19,4 +19,6 @@ public:
         freeList.push(i);
     }
     T& operator[](int i) { return items[i]; }
+	T* begin() { return items; }
+    T* end() { return items + N; }
 };

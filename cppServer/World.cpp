@@ -1,13 +1,13 @@
-#include"GameRoom.h"
+#include"World.h"
 
-void GameRoom::Init() {
+void World::Init() {
     playerList[0].SetHome(300, 0, 600, 300);
     playerList[1].SetHome(300, 600, 600, 900);
     playerList[2].SetHome(0, 300, 300, 600);
     playerList[3].SetHome(600, 300, 900, 600);
 }
 
-void GameRoom::Update(float dt) {
+void World::Update(float dt) {
     UpdatePlayers(dt);
     UpdateBullets(dt);
     CheckBulletHits();
@@ -18,14 +18,14 @@ void GameRoom::Update(float dt) {
 
 }
 
-void GameRoom::UpdatePlayers(float dt) {
+void World::UpdatePlayers(float dt) {
     for (int i = 0; i < MAX_SEATS; i++) {
         if (!playerList[i].IsActive()) continue;
         playerList[i].Update(dt);
     }
 }
 
-void GameRoom::UpdateBullets(float dt) {
+void World::UpdateBullets(float dt) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bulletList[i].IsActive()) continue;
         bulletList[i].Update(dt);
@@ -36,7 +36,7 @@ void GameRoom::UpdateBullets(float dt) {
     }
 }
 
-void GameRoom::CheckBulletHits() {
+void World::CheckBulletHits() {
     for (int i = 0; i < MAX_SEATS; i++) {
         if (!playerList[i].IsActive()) continue;
 
@@ -58,7 +58,7 @@ void GameRoom::CheckBulletHits() {
     }
 }
 
-void GameRoom::HandleConnect(RecvPacket& packet) {
+void World::HandleJoin(RecvPacket& packet) {
     int seat = FindEmptySeat();
     if (seat == -1) return;
 
@@ -74,7 +74,7 @@ void GameRoom::HandleConnect(RecvPacket& packet) {
     Broadcast((const char*)&cp, sizeof(cp));
 }
 
-void GameRoom::HandleDisconnect(RecvPacket& packet) {
+void World::HandleDisconnect(RecvPacket& packet) {
     int idx = packet.sessionIndex;
 
     int seat = FindSeatBySession(idx);
@@ -84,14 +84,14 @@ void GameRoom::HandleDisconnect(RecvPacket& packet) {
     RemovePlayer(idx);
 }
 
-void GameRoom::HandleMove(RecvPacket& packet) {
+void World::HandleMove(RecvPacket& packet) {
     if (packet.body.size() < 1) return;
     unsigned char keys = static_cast<unsigned char>(packet.body[0]);
     int seat = FindSeatBySession(packet.sessionIndex);
     playerList[seat].SetKeys(keys);
 }
 
-void GameRoom::HandleAttack(RecvPacket& packet) {
+void World::HandleAttack(RecvPacket& packet) {
     if (packet.body.size() < sizeof(float) * 2) return;
     int seat = FindSeatBySession(packet.sessionIndex);
     if (!playerList[seat].IsActive()) return;
@@ -120,14 +120,14 @@ void GameRoom::HandleAttack(RecvPacket& packet) {
     }
 }
 
-void GameRoom::HandlePacket(RecvPacket& packet) {
+void World::HandlePacket(RecvPacket& packet) {
     switch (packet.id)
     {
     case PacketId::Move:
         HandleMove(packet);
         break;
-    case PacketId::Connect:
-        HandleConnect(packet);
+    case PacketId::Join:
+		HandleJoin(packet);
         break;
     case PacketId::Disconnect:
         HandleDisconnect(packet);
@@ -140,21 +140,21 @@ void GameRoom::HandlePacket(RecvPacket& packet) {
     }
 }
 
-int GameRoom::FindEmptySeat() {
+int World::FindEmptySeat() {
     for (int i = 0; i < MAX_SEATS; ++i) {
         if (seats[i] == -1) return i;
     }
     return -1;
 }
 
-int GameRoom::FindSeatBySession(int sessionIndex) {
+int World::FindSeatBySession(int sessionIndex) {
     for (int i = 0; i < MAX_SEATS; ++i) {
         if (seats[i] == sessionIndex) return i;
     }
     return -1;
 }
 
-void GameRoom::Broadcast(const char* packet, int len) {
+void World::Broadcast(const char* packet, int len) {
     for (int i = 0; i < MAX_SEATS; ++i) {
         if (seats[i] == -1) continue;
 
@@ -168,7 +168,7 @@ void GameRoom::Broadcast(const char* packet, int len) {
     }
 }
 
-void GameRoom::RemovePlayer(int i) {
+void World::RemovePlayer(int i) {
     playerList[i].Clear();
 
     RemovePlayerPacket rp;
@@ -179,7 +179,7 @@ void GameRoom::RemovePlayer(int i) {
     Broadcast((char*)&rp, rp.h.size);
 }
 
-void GameRoom::RemoveBullet(int i) {
+void World::RemoveBullet(int i) {
     bulletList[i].Clear();
 
     RemoveBulletPacket rp;
@@ -190,7 +190,7 @@ void GameRoom::RemoveBullet(int i) {
     Broadcast((char*)&rp, rp.h.size);
 }
 
-bool GameRoom::IsVisible(int receiverSeat, float targetX, float targetY) {
+bool World::IsVisible(int receiverSeat, float targetX, float targetY) {
     if (playerList[receiverSeat].IsInHomeZone(targetX, targetY))
         return true;
 
@@ -205,7 +205,7 @@ bool GameRoom::IsVisible(int receiverSeat, float targetX, float targetY) {
     return false;
 }
 
-void GameRoom::SendStateToPlayer(int receiverSeat) {
+void World::SendStateToPlayer(int receiverSeat) {
     if (!playerList[receiverSeat].IsActive()) return;
     int idx = seats[receiverSeat];
     Session* s = &g_sessionList[idx];
@@ -269,7 +269,7 @@ void GameRoom::SendStateToPlayer(int receiverSeat) {
     }
 }
 
-void GameRoom::SendStateToObserver(int receiverSeat) {
+void World::SendStateToObserver(int receiverSeat) {
     if (playerList[receiverSeat].IsActive() || seats[receiverSeat] == -1) return;
     int idx = seats[receiverSeat];
     Session* s = &g_sessionList[idx];

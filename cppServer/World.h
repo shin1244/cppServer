@@ -4,15 +4,16 @@
 #include<iostream>
 #include"Protocol.h"
 #include"NetworkCore.h"
+#include"ObjectPool.h"
 
-class GameRoom {
+class World {
 public:
     void Init();
     void Update(float dt);
     void HandlePacket(RecvPacket& packet); 
 
 private:
-    void HandleConnect(RecvPacket&);
+    void HandleJoin(RecvPacket&);
     void HandleDisconnect(RecvPacket&);
     void HandleMove(RecvPacket&);
     void HandleAttack(RecvPacket&);
