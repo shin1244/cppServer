@@ -5,6 +5,21 @@
 #include"Protocol.h"
 #include"NetworkCore.h"
 #include"ObjectPool.h"
+#include"Map.h"
+
+enum class SlotState {
+    Empty,
+    Waiting,
+    Playing,
+    Observing,
+};
+
+struct PlayerSlot {
+    int sessionIndex = -1;
+    SlotState state = SlotState::Empty;
+
+    Player player;
+};
 
 class World {
 public:
@@ -25,18 +40,21 @@ private:
     void RemoveBullet(int i);
     void Broadcast(const char* packet, int len);
 
-    int FindEmptySeat();
-    int FindSeatBySession(int sessionIndex);
+    int FindEmptySlot();
+    int FindSlotBySession(int sessionIndex);
 
-    static const int MAX_SEATS = 4;
-    static const int MAX_BULLETS = 64;
+    static const int W = 1000;
+    static const int Y = 1000;
+    static const int WALL = 1000;
+    static const int SEED = 1234;
+    static const int MAX_PLAYER = 4;
+    static const int MAX_BULLETS = 1024;
 
-    Player playerList[MAX_SEATS];
-    int seats[MAX_SEATS] = { -1, -1, -1, -1 };
 
-    Bullet bulletList[64];
+    Map map;
+    PlayerSlot slots[MAX_PLAYER];
+    Bullet bullets[MAX_BULLETS];
 
 	bool IsVisible(int receiverSeat, float targetX, float targetY);
     void SendStateToPlayer(int receiverSeat);
-    void SendStateToObserver(int receiverSeat);
 };

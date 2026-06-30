@@ -3,7 +3,6 @@
 class Bullet {
 private:
     bool active = false;
-    int ownerId = -1;
     float x = 0;
     float y = 0;
     float dirX = 0;

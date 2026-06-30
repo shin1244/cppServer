@@ -1,51 +1,47 @@
 #include"World.h"
 
 void World::Init() {
-    playerList[0].SetHome(300, 0, 600, 300);
-    playerList[1].SetHome(300, 600, 600, 900);
-    playerList[2].SetHome(0, 300, 300, 600);
-    playerList[3].SetHome(600, 300, 900, 600);
+    map.Generate(W, Y, WALL, MAX_PLAYER, SEED);
+    const auto& spawns = map.GetSpawnPoints();
+
+    for (int i = 0; i < MAX_PLAYER; i++) {
+        players[i].SetPos(spawns[i].x, spawns[i].y);
+    }
 }
 
 void World::Update(float dt) {
     UpdatePlayers(dt);
     UpdateBullets(dt);
     CheckBulletHits();
-    for (int i = 0; i < MAX_SEATS; i++) {
+    for (int i = 0; i < MAX_PLAYER; i++) {
         SendStateToPlayer(i);
-        SendStateToObserver(i);
     }
-
 }
 
 void World::UpdatePlayers(float dt) {
-    for (int i = 0; i < MAX_SEATS; i++) {
-        if (!playerList[i].IsActive()) continue;
-        playerList[i].Update(dt);
+    for (int i = 0; i < MAX_PLAYER; i++) {
+        if (slots[i].state != SlotState::Playing) continue;
+        slots[i].player.Update(dt);
     }
 }
 
 void World::UpdateBullets(float dt) {
     for (int i = 0; i < MAX_BULLETS; i++) {
-        if (!bulletList[i].IsActive()) continue;
-        bulletList[i].Update(dt);
-        if (bulletList[i].GetX() > 900 || bulletList[i].GetX() < 0
-            || bulletList[i].GetY() > 900 || bulletList[i].GetY() < 0) {
-            RemoveBullet(i);
-        }
+        if (!bullets[i].IsActive()) continue;
+        bullets[i].Update(dt);
     }
 }
 
 void World::CheckBulletHits() {
-    for (int i = 0; i < MAX_SEATS; i++) {
-        if (!playerList[i].IsActive()) continue;
+    for (int i = 0; i < MAX_PLAYER; i++) {
+        if (!players[i].IsActive()) continue;
 
         for (int j = 0; j < MAX_BULLETS; j++) {
-            if (!bulletList[j].IsActive()) continue;
-            if (i == bulletList[j].GetOwnerId()) continue;
+            if (!bullets[j].IsActive()) continue;
+            if (i == bullets[j].GetOwnerId()) continue;
 
-            float dx = playerList[i].GetX() - bulletList[j].GetX();
-            float dy = playerList[i].GetY() - bulletList[j].GetY();
+            float dx = players[i].GetX() - bullets[j].GetX();
+            float dy = players[i].GetY() - bullets[j].GetY();
 
             float hitRadius = 14.0f;
             float distSq = dx * dx + dy * dy;
@@ -59,12 +55,10 @@ void World::CheckBulletHits() {
 }
 
 void World::HandleJoin(RecvPacket& packet) {
-    int seat = FindEmptySeat();
+    int seat = FindEmptySlot();
     if (seat == -1) return;
 
     int idx = packet.sessionIndex;
-    seats[seat] = idx;
-    playerList[seat].Init(idx);
 
     ConnectPacket cp;
     cp.h.size = sizeof(ConnectPacket);
@@ -77,7 +71,7 @@ void World::HandleJoin(RecvPacket& packet) {
 void World::HandleDisconnect(RecvPacket& packet) {
     int idx = packet.sessionIndex;
 
-    int seat = FindSeatBySession(idx);
+    int seat = FindSlotBySession(idx);
     if (seat == -1) return;
 
     seats[seat] = -1;
@@ -87,14 +81,14 @@ void World::HandleDisconnect(RecvPacket& packet) {
 void World::HandleMove(RecvPacket& packet) {
     if (packet.body.size() < 1) return;
     unsigned char keys = static_cast<unsigned char>(packet.body[0]);
-    int seat = FindSeatBySession(packet.sessionIndex);
-    playerList[seat].SetKeys(keys);
+    int seat = FindSlotBySession(packet.sessionIndex);
+    players[seat].SetKeys(keys);
 }
 
 void World::HandleAttack(RecvPacket& packet) {
     if (packet.body.size() < sizeof(float) * 2) return;
-    int seat = FindSeatBySession(packet.sessionIndex);
-    if (!playerList[seat].IsActive()) return;
+    int seat = FindSlotBySession(packet.sessionIndex);
+    if (!players[seat].IsActive()) return;
 
     float dirX;
     float dirY;
@@ -103,12 +97,12 @@ void World::HandleAttack(RecvPacket& packet) {
     memcpy(&dirY, packet.body.data() + sizeof(float), sizeof(float));
 
     for (int i = 0; i < MAX_BULLETS; i++) {
-        if (bulletList[i].IsActive()) continue;
+        if (bullets[i].IsActive()) continue;
 
-        bulletList[i].Fire(
+        bullets[i].Fire(
             seat,
-            playerList[seat].GetX(),
-            playerList[seat].GetY(),
+            players[seat].GetX(),
+            players[seat].GetY(),
             dirX,
             dirY
         );
@@ -140,22 +134,22 @@ void World::HandlePacket(RecvPacket& packet) {
     }
 }
 
-int World::FindEmptySeat() {
-    for (int i = 0; i < MAX_SEATS; ++i) {
-        if (seats[i] == -1) return i;
+int World::FindEmptySlot() {
+    for (int i = 0; i < MAX_PLAYER; ++i) {
+        if (slots[i].state == SlotState::Empty) return i;
     }
     return -1;
 }
 
-int World::FindSeatBySession(int sessionIndex) {
-    for (int i = 0; i < MAX_SEATS; ++i) {
-        if (seats[i] == sessionIndex) return i;
+int World::FindSlotBySession(int sessionIndex) {
+    for (int i = 0; i < MAX_PLAYER; ++i) {
+        if (slots[i].sessionIndex == sessionIndex) return i;
     }
     return -1;
 }
 
 void World::Broadcast(const char* packet, int len) {
-    for (int i = 0; i < MAX_SEATS; ++i) {
+    for (int i = 0; i < MAX_PLAYER; ++i) {
         if (seats[i] == -1) continue;
 
         int idx = seats[i];
@@ -169,7 +163,7 @@ void World::Broadcast(const char* packet, int len) {
 }
 
 void World::RemovePlayer(int i) {
-    playerList[i].Clear();
+    players[i].Clear();
 
     RemovePlayerPacket rp;
     rp.h.size = sizeof(RemovePlayerPacket);
@@ -180,7 +174,7 @@ void World::RemovePlayer(int i) {
 }
 
 void World::RemoveBullet(int i) {
-    bulletList[i].Clear();
+    bullets[i].Clear();
 
     RemoveBulletPacket rp;
     rp.h.size = sizeof(rp);
@@ -191,14 +185,14 @@ void World::RemoveBullet(int i) {
 }
 
 bool World::IsVisible(int receiverSeat, float targetX, float targetY) {
-    if (playerList[receiverSeat].IsInHomeZone(targetX, targetY))
+    if (players[receiverSeat].IsInHomeZone(targetX, targetY))
         return true;
 
     for (int i = 0; i < MAX_BULLETS; i++) {
-        if (!bulletList[i].IsActive()) continue;
-		if (bulletList[i].GetOwnerId() != receiverSeat) continue;
-        float dx = targetX - bulletList[i].GetX();
-        float dy = targetY - bulletList[i].GetY();
+        if (!bullets[i].IsActive()) continue;
+		if (bullets[i].GetOwnerId() != receiverSeat) continue;
+        float dx = targetX - bullets[i].GetX();
+        float dy = targetY - bullets[i].GetY();
         if (abs(dx) < 100 && abs(dy) < 100)
             return true;
     }
@@ -206,20 +200,20 @@ bool World::IsVisible(int receiverSeat, float targetX, float targetY) {
 }
 
 void World::SendStateToPlayer(int receiverSeat) {
-    if (!playerList[receiverSeat].IsActive()) return;
+    if (!players[receiverSeat].IsActive()) return;
     int idx = seats[receiverSeat];
     Session* s = &g_sessionList[idx];
 
-    for (int i = 0; i < MAX_SEATS; i++) {
-        if (!playerList[i].IsActive()) continue;
-        if (IsVisible(receiverSeat, playerList[i].GetX(), playerList[i].GetY())) {
+    for (int i = 0; i < MAX_PLAYER; i++) {
+        if (!players[i].IsActive()) continue;
+        if (IsVisible(receiverSeat, players[i].GetX(), players[i].GetY())) {
             MovePacket mp;
 
             mp.h.size = sizeof(MovePacket);
             mp.h.id = static_cast<unsigned short>(PacketId::Move);
             mp.playerId = i;
-            mp.x = playerList[i].GetX();
-            mp.y = playerList[i].GetY();
+            mp.x = players[i].GetX();
+            mp.y = players[i].GetY();
 
             s->sendLock.lock();
             s->sendBuffer.Write((const char*)&mp, mp.h.size);
@@ -239,16 +233,16 @@ void World::SendStateToPlayer(int receiverSeat) {
         }
     }
     for (int i = 0; i < MAX_BULLETS; i++) {
-        if (!bulletList[i].IsActive()) continue;
-        if (IsVisible(receiverSeat, bulletList[i].GetX(), bulletList[i].GetY())) {
+        if (!bullets[i].IsActive()) continue;
+        if (IsVisible(receiverSeat, bullets[i].GetX(), bullets[i].GetY())) {
 
             BulletMovePacket bp;
             bp.h.size = sizeof(BulletMovePacket);
             bp.h.id = static_cast<unsigned short>(PacketId::Attack);
             bp.bulletId = i;
-            bp.ownerId = bulletList[i].GetOwnerId();
-            bp.x = bulletList[i].GetX();
-            bp.y = bulletList[i].GetY();
+            bp.ownerId = bullets[i].GetOwnerId();
+            bp.x = bullets[i].GetX();
+            bp.y = bullets[i].GetY();
 
             s->sendLock.lock();
             s->sendBuffer.Write((const char*)&bp, bp.h.size);
@@ -268,43 +262,3 @@ void World::SendStateToPlayer(int receiverSeat) {
         }
     }
 }
-
-void World::SendStateToObserver(int receiverSeat) {
-    if (playerList[receiverSeat].IsActive() || seats[receiverSeat] == -1) return;
-    int idx = seats[receiverSeat];
-    Session* s = &g_sessionList[idx];
-
-    for (int i = 0; i < MAX_SEATS; i++) {
-        if (!playerList[i].IsActive()) continue;
-
-        MovePacket mp;
-
-        mp.h.size = sizeof(MovePacket);
-        mp.h.id = static_cast<unsigned short>(PacketId::Move);
-        mp.playerId = i;
-        mp.x = playerList[i].GetX();
-        mp.y = playerList[i].GetY();
-
-        s->sendLock.lock();
-        s->sendBuffer.Write((const char*)&mp, mp.h.size);
-        flushSend(s);
-        s->sendLock.unlock();
-    }
-
-    for (int i = 0; i < MAX_BULLETS; i++) {
-        if (!bulletList[i].IsActive()) continue;
-
-            BulletMovePacket bp;
-            bp.h.size = sizeof(BulletMovePacket);
-            bp.h.id = static_cast<unsigned short>(PacketId::Attack);
-            bp.bulletId = i;
-            bp.ownerId = bulletList[i].GetOwnerId();
-            bp.x = bulletList[i].GetX();
-            bp.y = bulletList[i].GetY();
-
-            s->sendLock.lock();
-            s->sendBuffer.Write((const char*)&bp, bp.h.size);
-            flushSend(s);
-            s->sendLock.unlock();
-        }
-    }

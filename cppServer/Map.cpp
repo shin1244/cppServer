@@ -28,7 +28,7 @@ void Map::PlaceRandomWalls(int wallCount, std::mt19937& rng) {
     while (placed < wallCount) {
         int cx = distX(rng);
         int cy = distY(rng);
-        int idx = cy * width + cx;
+        int idx = CellIndex(cx, cy);
 
         if (cells[idx] != 0) continue;
 
@@ -69,8 +69,9 @@ bool Map::IsFullyConnected() const {
         for (int i = 0; i < 4; i++) {
             int nx = cx + dx[i];
             int ny = cy + dy[i];
-            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-            int nextIdx = ny * width + nx;
+            
+            if (InBounds(nx, ny)) continue;
+            int nextIdx = CellIndex(nx, ny);
 
             if (nextIdx >= 0 && nextIdx < width * height 
                 && !visited[nextIdx] && cells[nextIdx] == 0) {
@@ -91,7 +92,7 @@ void Map::GenerateSpawnPoints(int playerCount, std::mt19937& rng) {
     while ((int)spawnPoints.size() < playerCount) {
         int cx = distX(rng);
         int cy = distY(rng);
-        if (cells[cy * width + cx] != 0) continue;
+        if (cells[CellIndex(cx, cy)] != 0) continue;
 
         Vec2 p;
         p.x = cx * CELL_SIZE + CELL_SIZE / 2.0f;

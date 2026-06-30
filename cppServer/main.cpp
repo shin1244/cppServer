@@ -10,7 +10,6 @@
 #include"Protocol.h"
 #include"NetworkCore.h"
 #include"World.h"
-#include"User.h"
 
 HANDLE g_iocp;   // IOCP วฺต้
 

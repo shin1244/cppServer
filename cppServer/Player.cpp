@@ -4,11 +4,6 @@ void Player::Init(int sessionIdx) {
     sessionIndex = sessionIdx;
     x = (homeMinX + homeMaxX) * 0.5f;
     y = (homeMinY + homeMaxY) * 0.5f;
-    active = true;
-}
-
-void Player::Clear() {
-    active = false;
 }
 
 void Player::SetKeys(unsigned char k) { keys = k; }
@@ -47,8 +42,6 @@ void Player::SetHome(float minX, float minY, float maxX, float maxY) {
     homeMinX = minX; homeMinY = minY;
     homeMaxX = maxX; homeMaxY = maxY;
 }
-
-bool Player::IsActive() { return active; }
 
 float Player::GetX() const { return x; }
 float Player::GetY() const { return y; }

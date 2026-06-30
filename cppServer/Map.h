@@ -52,6 +52,6 @@ private:
 
     // ¦¡¦¡ ¼¿ ´ÜÀ§ ÇïÆÛ ¦¡¦¡
     bool InBounds(int cx, int cy) const;
-    bool IsWallCell(int cx, int cy) const;  // ºó Ä­ + ¹üÀ§ Ã¼Å©
+    bool IsWallCell(int cx, int cy) const;
     int  CellIndex(int cx, int cy) const { return cy * width + cx; }
 };
