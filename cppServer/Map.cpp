@@ -15,6 +15,8 @@ void Map::Generate(int widthCells, int heightCells,
         if (IsFullyConnected()) break;
         attempt++;
     }
+    std::mt19937 spawnRng(seed);
+    GenerateSpawnPoints(playerCount, spawnRng);
 }
 
 void Map::PlaceRandomWalls(int wallCount, std::mt19937& rng) {
@@ -78,4 +80,45 @@ bool Map::IsFullyConnected() const {
         }
     }
     return visitedCount == totalEmpty;
+}
+
+void Map::GenerateSpawnPoints(int playerCount, std::mt19937& rng) {
+    std::uniform_int_distribution<int> distX(0, width - 1);
+    std::uniform_int_distribution<int> distY(0, height - 1);
+
+    spawnPoints.clear();
+
+    while ((int)spawnPoints.size() < playerCount) {
+        int cx = distX(rng);
+        int cy = distY(rng);
+        if (cells[cy * width + cx] != 0) continue;
+
+        Vec2 p;
+        p.x = cx * CELL_SIZE + CELL_SIZE / 2.0f;
+        p.y = cy * CELL_SIZE + CELL_SIZE / 2.0f;
+
+        spawnPoints.push_back(p);
+    }
+}
+
+bool Map::IsWall(float worldX, float worldY) const {
+    return IsWallCell(WorldToCellX(worldX), WorldToCellY(worldY));
+}
+
+bool Map::DamageWall(float worldX, float worldY) {
+    int cx = WorldToCellX(worldX);
+    int cy = WorldToCellY(worldY);
+    if (!InBounds(cx, cy)) return false;
+    int idx = CellIndex(cx, cy);
+    if (cells[idx] == 0) return false;
+    cells[idx]--;
+    return cells[idx] == 0;
+}
+
+int  Map::WorldToCellX(float worldX) const { return static_cast<int>(worldX / CELL_SIZE); }
+int  Map::WorldToCellY(float worldY) const { return static_cast<int>(worldY / CELL_SIZE); }
+bool Map::InBounds(int cx, int cy) const { return cx >= 0 && cx < width && cy >= 0 && cy < height; }
+bool Map::IsWallCell(int cx, int cy) const {
+    if (!InBounds(cx, cy)) return true; 
+    return cells[CellIndex(cx, cy)] != 0;
 }
