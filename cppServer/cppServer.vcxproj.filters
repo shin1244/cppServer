@@ -39,6 +39,9 @@
     <ClCompile Include="SpatialGrid.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="World_Net.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RingBuffer.h">

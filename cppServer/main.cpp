@@ -57,6 +57,9 @@ int main() {
     constexpr int   TICK_MS = 33;    
     constexpr float TICK_DT = TICK_MS / 1000.0f;
 
+    World world;
+    world.Init();
+
     // 메인 루프 시작
     std::vector<RecvPacket> buffer;
     while (true) {
@@ -65,21 +68,7 @@ int main() {
         buffer.clear();
         g_recvQueue.Swap(buffer);
         for (auto& packet : buffer) {
-            if (packet.id == PacketId::Connect) {
-				g_users[packet.sessionIndex].inUse = true;
-				g_users[packet.sessionIndex].sessionIndex = packet.sessionIndex;
-                continue;
-            }
-			User& user = g_users[packet.sessionIndex];
-            if (user.room == nullptr) {
-                
-			}
-            else {
-                user.room->HandlePacket(packet);
-            }
-        }
-        for (auto& room : g_rooms) {
-            room.Update(TICK_DT);
+            world.HandlePacket(packet);
         }
 
         std::this_thread::sleep_until(tickStart + std::chrono::milliseconds(TICK_MS));

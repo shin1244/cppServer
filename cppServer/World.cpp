@@ -12,6 +12,8 @@ void World::Init() {
 void World::Update(float dt) {
     UpdatePlayers(dt);
     UpdateBullets(dt);
+    UpdateGrid();
+    SendAOIUpdates();
 }
 
 void World::UpdatePlayers(float dt) {
@@ -28,77 +30,49 @@ void World::UpdateBullets(float dt) {
     }
 }
 
-void World::HandlePacket(RecvPacket& packet) {
-    switch (packet.id)
-    {
-    case PacketId::Move:
-        HandleMove(packet);
-        break;
-    case PacketId::Attack:
-        HandleAttack(packet);
-        break;
-    case PacketId::Join:
-		HandleJoin(packet);
-        break;
-    case PacketId::Disconnect:
-        HandleDisconnect(packet);
-        break;
-    default:
-        break;
+void World::UpdateGrid() {
+    playerGrid.Clear();
+    for (int i = 0; i < MAX_PLAYER; i++) {
+        if (slots[i].state != SlotState::Playing) continue;
+        playerGrid.Add(i, slots[i].player.GetX(), slots[i].player.GetY());
     }
-}
-
-void World::HandleMove(RecvPacket& packet) {
-    if (packet.body.size() < 1) return;
-    unsigned char keys = static_cast<unsigned char>(packet.body[0]);
-    int idx = FindSlotBySession(packet.sessionIndex);
-    slots[idx].player.SetKeys(keys);
-}
-
-void World::HandleAttack(RecvPacket& packet) {
-    if (packet.body.size() < sizeof(float) * 2) return;
-    int idx = FindSlotBySession(packet.sessionIndex);
-    if (slots[idx].state != SlotState::Playing) return;
-
-    float dirX;
-    float dirY;
-
-    memcpy(&dirX, packet.body.data(), sizeof(float));
-    memcpy(&dirY, packet.body.data() + sizeof(float), sizeof(float));
-
+    bulletGrid.Clear();
     for (int i = 0; i < MAX_BULLETS; i++) {
-        if (bullets[i].IsActive()) continue;
-
-        bullets[i].Fire(
-            slots[idx].player.GetX(),
-            slots[idx].player.GetY(),
-            dirX,
-            dirY
-        );
-        break;
+        if (!bullets[i].IsActive()) continue;
+        bulletGrid.Add(i, bullets[i].GetX(), bullets[i].GetY());
     }
 }
 
-void World::HandleJoin(RecvPacket& packet) {
-    int seat = FindEmptySlot();
-    if (seat == -1) return;
+void World::SendAOIUpdates() {
+    for (int i = 0; i < MAX_PLAYER; ++i) {
+        if (slots[i].state != SlotState::Playing) continue;
+        std::vector<int> visiblePlayers;
+        playerGrid.QueryNeighbors(slots[i].player.GetX(), slots[i].player.GetY(), visiblePlayers);
 
-    int idx = packet.sessionIndex;
+        for (int target : visiblePlayers) {
+            PlayerMovePacket pp;
+			pp.h.id = static_cast<unsigned short>(PacketId::Move);
+            pp.h.size = sizeof(PlayerMovePacket);
+            pp.playerId = target;
+            pp.x = slots[target].player.GetX();
+            pp.y = slots[target].player.GetY();
 
-    ConnectPacket cp;
-    cp.h.size = sizeof(ConnectPacket);
-    cp.h.id = static_cast<unsigned short>(PacketId::Connect);
-    cp.playerId = seat;
+            SendTo(i, (char*)&pp, pp.h.size);
+        }
 
-    Broadcast((const char*)&cp, sizeof(cp));
-}
+        std::vector<int> visibleBullets;
+        bulletGrid.QueryNeighbors(slots[i].player.GetX(), slots[i].player.GetY(), visibleBullets);
 
-void World::HandleDisconnect(RecvPacket& packet) {
-    int idx = FindSlotBySession(packet.sessionIndex);
-    slots[idx].state = SlotState::Empty;
-    slots[idx].sessionIndex = -1;
+        for (int target : visibleBullets) {
+            BulletMovePacket bp;
+			bp.h.id = static_cast<unsigned short>(PacketId::Move);
+            bp.bulletId = target;
+            bp.x = bullets[target].GetX();
+            bp.y = bullets[target].GetY();
 
-    RemovePlayer(idx);
+            SendTo(i, (char*)&bp, bp.h.size);
+        }
+    }
 }
 
 int World::FindEmptySlot() {
@@ -113,19 +87,6 @@ int World::FindSlotBySession(int sessionIndex) {
         if (slots[i].sessionIndex == sessionIndex) return i;
     }
     return -1;
-}
-
-void World::Broadcast(const char* packet, int len) {
-    for (int i = 0; i < MAX_PLAYER; ++i) {
-        if (slots[i].state == SlotState::Empty) continue;
-        int idx = slots[i].sessionIndex;
-        Session* s = &g_sessionList[idx];
-
-        s->sendLock.lock();
-        s->sendBuffer.Write(packet, len);
-        flushSend(s);
-        s->sendLock.unlock();
-    }
 }
 
 void World::RemovePlayer(int i) {

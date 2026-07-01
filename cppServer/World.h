@@ -6,6 +6,7 @@
 #include"NetworkCore.h"
 #include"ObjectPool.h"
 #include"Map.h"
+#include"SpatialGrid.h"
 
 enum class SlotState {
     Empty,
@@ -28,20 +29,6 @@ public:
     void HandlePacket(RecvPacket& packet); 
 
 private:
-    void HandleJoin(RecvPacket&);
-    void HandleDisconnect(RecvPacket&);
-    void HandleMove(RecvPacket&);
-    void HandleAttack(RecvPacket&);
-
-    void UpdatePlayers(float dt);
-    void UpdateBullets(float dt);
-    void RemovePlayer(int i);
-    void RemoveBullet(int i);
-    void Broadcast(const char* packet, int len);
-
-    int FindEmptySlot();
-    int FindSlotBySession(int sessionIndex);
-
     static const int W = 1000;
     static const int Y = 1000;
     static const int WALL = 1000;
@@ -49,8 +36,27 @@ private:
     static const int MAX_PLAYER = 4;
     static const int MAX_BULLETS = 1024;
 
-
     Map map;
     PlayerSlot slots[MAX_PLAYER];
     Bullet bullets[MAX_BULLETS];
+    SpatialGrid playerGrid;
+    SpatialGrid bulletGrid;
+
+    void HandleJoin(RecvPacket&);
+    void HandleDisconnect(RecvPacket&);
+    void HandleMove(RecvPacket&);
+    void HandleAttack(RecvPacket&);
+
+    void UpdatePlayers(float dt);
+    void UpdateBullets(float dt);
+    void UpdateGrid();
+    void SendAOIUpdates();
+
+    void RemovePlayer(int i);
+    void RemoveBullet(int i);
+    void Broadcast(const char* packet, int len);
+    void SendTo(int idx, const char* packet, int len);
+
+    int FindEmptySlot();
+    int FindSlotBySession(int sessionIndex);
 };

@@ -5,28 +5,16 @@ void SpatialGrid::Init(float worldW, float worldH, float cellSize) {
 	cols = (int)ceil(worldW / cell);
 	rows = (int)ceil(worldH / cell);
 	buckets.resize(cols * rows);
-} 
+}
+
+void SpatialGrid::Clear() {
+	for (int i = 0; i < cols * rows; i++)
+		buckets[i].clear();
+}
 
 void SpatialGrid::Add(int id, float x, float y) {
 	int idx = CellIndex(x, y);
 	buckets[idx].push_back(id);
-}
-
-void SpatialGrid::Remove(int id, float x, float y) {
-	int idx = CellIndex(x, y);
-	auto& bucket = buckets[idx];
-	for (size_t i = 0; i < bucket.size(); ++i) {
-		if (bucket[i] == id) {
-			bucket[i] = bucket.back();
-			bucket.pop_back();
-			return;
-		}
-	}
-}
-
-void SpatialGrid::Move(int id, float ox, float oy, float nx, float ny) {
-	Remove(id, ox, oy);
-	Add(id, nx, ny);
 }
 
 void SpatialGrid::QueryNeighbors(float x, float y, std::vector<int>& out) const {
