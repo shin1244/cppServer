@@ -35,7 +35,6 @@ private:
 
     void UpdatePlayers(float dt);
     void UpdateBullets(float dt);
-    void CheckBulletHits();
     void RemovePlayer(int i);
     void RemoveBullet(int i);
     void Broadcast(const char* packet, int len);
@@ -54,7 +53,4 @@ private:
     Map map;
     PlayerSlot slots[MAX_PLAYER];
     Bullet bullets[MAX_BULLETS];
-
-	bool IsVisible(int receiverSeat, float targetX, float targetY);
-    void SendStateToPlayer(int receiverSeat);
 };

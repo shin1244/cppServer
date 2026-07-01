@@ -1,11 +1,5 @@
 #include"Player.h"
 
-void Player::Init(int sessionIdx) {
-    sessionIndex = sessionIdx;
-    x = (homeMinX + homeMaxX) * 0.5f;
-    y = (homeMinY + homeMaxY) * 0.5f;
-}
-
 void Player::SetKeys(unsigned char k) { keys = k; }
 
 void Player::Update(float dt) {
@@ -21,11 +15,6 @@ void Player::Update(float dt) {
         x += dx * PLAYER_SPEED * dt;
         y += dy * PLAYER_SPEED * dt;
     }
-
-    if (x < homeMinX) x = homeMinX;
-    if (x > homeMaxX) x = homeMaxX;
-    if (y < homeMinY) y = homeMinY;
-    if (y > homeMaxY) y = homeMaxY;
 }
 
 void Player::Move(float dx, float dy) {
@@ -38,20 +27,5 @@ void Player::SetPos(float nx, float ny) {
     y = ny; 
 }
 
-void Player::SetHome(float minX, float minY, float maxX, float maxY) {
-    homeMinX = minX; homeMinY = minY;
-    homeMaxX = maxX; homeMaxY = maxY;
-}
-
 float Player::GetX() const { return x; }
 float Player::GetY() const { return y; }
-
-float Player::GetHomeMinX() const { return homeMinX; }
-float Player::GetHomeMinY() const { return homeMinY; }
-float Player::GetHomeMaxX() const { return homeMaxX; }
-float Player::GetHomeMaxY() const { return homeMaxY; }
-
-bool Player::IsInHomeZone(float targetX, float targetY) {
-    return (targetX >= homeMinX && targetX <= homeMaxX &&
-            targetY >= homeMinY && targetY <= homeMaxY);
-}
