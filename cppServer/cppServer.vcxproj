@@ -125,6 +125,7 @@
   <ItemGroup>
     <ClCompile Include="Bullet.cpp" />
     <ClCompile Include="Map.cpp" />
+    <ClCompile Include="SpatialGrid.cpp" />
     <ClCompile Include="World.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="NetworkCore.cpp" />
@@ -135,6 +136,7 @@
     <ClInclude Include="Bullet.h" />
     <ClInclude Include="DoubleBuffer.h" />
     <ClInclude Include="Map.h" />
+    <ClInclude Include="SpatialGrid.h" />
     <ClInclude Include="World.h" />
     <ClInclude Include="NetworkCore.h" />
     <ClInclude Include="ObjectPool.h" />
