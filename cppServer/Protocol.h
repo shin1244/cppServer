@@ -3,18 +3,25 @@
 
 #pragma pack(push, 1)
 struct PacketHeader { unsigned short size; unsigned short id; };
-struct PlayerMovePacket { PacketHeader h; int playerId; float x, y; };
-struct BulletMovePacket { PacketHeader h; int bulletId; float x;float y; };
-struct ConnectPacket { PacketHeader h; int playerId; };
-struct RemovePlayerPacket { PacketHeader h; int playerId; };
-struct RemoveBulletPacket { PacketHeader h; int bulletId; };
-struct HidePlayerPacket { PacketHeader h; int playerId; };
-struct HideBulletPacket { PacketHeader h; int bulletId; };
+
+struct IdPacket {
+    PacketHeader h;
+    int id;
+};
+
+struct Vec2Packet {
+    PacketHeader h;
+    int id;
+    float x;
+    float y;
+};
 #pragma pack(pop)
 
 enum class PacketId : unsigned short {
     Connect,
     Disconnect,
+    Join,
+    Leave,
     Move,
     Attack,
     RemovePlayer,
@@ -22,7 +29,6 @@ enum class PacketId : unsigned short {
     HidePlayer,
     HideBullet,
     Chat,
-    Join,
 };
 
 const int HEADER_SIZE = 4;

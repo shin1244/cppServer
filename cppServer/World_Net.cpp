@@ -57,12 +57,12 @@ void World::HandleJoin(RecvPacket& packet) {
 
     int idx = packet.sessionIndex;
 
-    ConnectPacket cp;
-    cp.h.size = sizeof(ConnectPacket);
-    cp.h.id = static_cast<unsigned short>(PacketId::Connect);
-    cp.playerId = seat;
+    IdPacket p;
+    p.h.size = sizeof(IdPacket);
+    p.h.id = static_cast<unsigned short>(PacketId::Join);
+    p.id = seat;
 
-    Broadcast((const char*)&cp, sizeof(cp));
+    Broadcast((const char*)&p, p.h.size);
 }
 
 void World::HandleDisconnect(RecvPacket& packet) {

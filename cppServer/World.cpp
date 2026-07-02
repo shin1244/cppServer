@@ -50,27 +50,27 @@ void World::SendAOIUpdates() {
         playerGrid.QueryNeighbors(slots[i].player.GetX(), slots[i].player.GetY(), visiblePlayers);
 
         for (int target : visiblePlayers) {
-            PlayerMovePacket pp;
-			pp.h.id = static_cast<unsigned short>(PacketId::Move);
-            pp.h.size = sizeof(PlayerMovePacket);
-            pp.playerId = target;
-            pp.x = slots[target].player.GetX();
-            pp.y = slots[target].player.GetY();
+            Vec2Packet p;
+			p.h.id = static_cast<unsigned short>(PacketId::Move);
+            p.h.size = sizeof(Vec2Packet);
+            p.id = target;
+            p.x = slots[target].player.GetX();
+            p.y = slots[target].player.GetY();
 
-            SendTo(i, (char*)&pp, pp.h.size);
+            SendTo(i, (char*)&p, p.h.size);
         }
 
         std::vector<int> visibleBullets;
         bulletGrid.QueryNeighbors(slots[i].player.GetX(), slots[i].player.GetY(), visibleBullets);
 
         for (int target : visibleBullets) {
-            BulletMovePacket bp;
-			bp.h.id = static_cast<unsigned short>(PacketId::Move);
-            bp.bulletId = target;
-            bp.x = bullets[target].GetX();
-            bp.y = bullets[target].GetY();
+            Vec2Packet p;
+			p.h.id = static_cast<unsigned short>(PacketId::Move);
+            p.id = target;
+            p.x = bullets[target].GetX();
+            p.y = bullets[target].GetY();
 
-            SendTo(i, (char*)&bp, bp.h.size);
+            SendTo(i, (char*)&p, p.h.size);
         }
     }
 }
@@ -90,21 +90,21 @@ int World::FindSlotBySession(int sessionIndex) {
 }
 
 void World::RemovePlayer(int i) {
-    RemovePlayerPacket rp;
-    rp.h.size = sizeof(RemovePlayerPacket);
-    rp.h.id = static_cast<unsigned short>(PacketId::RemovePlayer);
-    rp.playerId = i;
+    IdPacket p;
+    p.h.size = sizeof(IdPacket);
+    p.h.id = static_cast<unsigned short>(PacketId::RemovePlayer);
+    p.id = i;
 
-    Broadcast((char*)&rp, rp.h.size);
+    Broadcast((char*)&p, p.h.size);
 }
 
 void World::RemoveBullet(int i) {
     bullets[i].Clear();
 
-    RemoveBulletPacket rp;
-    rp.h.size = sizeof(rp);
-    rp.h.id = (unsigned short)PacketId::RemoveBullet;
-    rp.bulletId = i;
+    IdPacket p;
+    p.h.size = sizeof(p);
+    p.h.id = (unsigned short)PacketId::RemoveBullet;
+    p.id = i;
 
-    Broadcast((char*)&rp, rp.h.size);
+    Broadcast((char*)&p, p.h.size);
 }

@@ -70,7 +70,7 @@ int main() {
         for (auto& packet : buffer) {
             world.HandlePacket(packet);
         }
-
+        world.Update(TICK_DT);
         std::this_thread::sleep_until(tickStart + std::chrono::milliseconds(TICK_MS));
     }
     
