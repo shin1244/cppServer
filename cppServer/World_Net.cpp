@@ -74,7 +74,7 @@ void World::HandleJoin(RecvPacket& packet) {
 void World::TryStartMatch() {
     if (running) return;
     for (int i = 0; i < MAX_PLAYER; i++) {
-        std::cout << i + "\n";
+        std::cout << i << "\n";
         if (slots[i].state == SlotState::Empty) return;
     }
     for (int i = 0; i < MAX_PLAYER; i++) {
@@ -82,13 +82,14 @@ void World::TryStartMatch() {
     }
 
     running = true;
+    BroadcastMapSnapshot();
 }
 
 void World::BroadcastMapSnapshot() {
     const auto& cells = map.GetCells();
     int mw = map.GetWidthCells();
 
-    std::vector<WallPos> walls;                 // ← 수집용 로컬 (전송 X)
+    std::vector<WallPos> walls;
     for (int i = 0; i < (int)cells.size(); i++)
         if (cells[i] != 0)
             walls.push_back({ (unsigned short)(i % mw), (unsigned short)(i / mw) });

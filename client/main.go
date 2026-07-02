@@ -40,6 +40,7 @@ const (
 	pktHidePlayer   = 9
 	pktHideBullet   = 10
 	pktChat         = 11
+	pktMapSnapshot  = 12
 )
 
 const (
@@ -52,6 +53,7 @@ const (
 
 type PlayerView struct{ x, y float32 }
 type BulletView struct{ x, y float32 }
+type Wall struct{ x, y, size float32 } // 월드 좌표 기준 좌상단 + 한 변 길이
 
 type Game struct {
 	conn net.Conn
@@ -59,6 +61,7 @@ type Game struct {
 	mu      sync.Mutex
 	players map[int32]*PlayerView
 	bullets map[int32]*BulletView
+	walls   []Wall
 
 	myID         int32
 	camX, camY   float32 // 카메라 좌상단(월드 좌표)
@@ -113,6 +116,16 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	camX, camY := g.camX, g.camY
 
 	drawGrid(screen, camX, camY)
+
+	// 벽 (정적 지형). 화면에 걸치는 것만 그린다.
+	wallColor := color.RGBA{90, 98, 110, 255}
+	for _, w := range g.walls {
+		sx, sy := w.x-camX, w.y-camY
+		if sx+w.size < 0 || sy+w.size < 0 || sx > screenW || sy > screenH {
+			continue
+		}
+		vector.DrawFilledRect(screen, sx, sy, w.size, w.size, wallColor, false)
+	}
 
 	for id, p := range g.players {
 		sx, sy := p.x-camX, p.y-camY
@@ -241,6 +254,23 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 		if oid, x, y, ok := readVec2(body); ok {
 			g.bullets[oid] = &BulletView{x: x, y: y}
 		}
+
+	case pktMapSnapshot:
+		// body: cellSize(2) width(2) height(2) wallCount(2) 뒤에 wallCount×{x(2),y(2)}
+		if len(body) < 8 {
+			return
+		}
+		cellSize := float32(binary.LittleEndian.Uint16(body[0:2]))
+		wallCount := int(binary.LittleEndian.Uint16(body[6:8]))
+		off := 8
+		walls := make([]Wall, 0, wallCount)
+		for i := 0; i < wallCount && off+4 <= len(body); i++ {
+			cx := float32(binary.LittleEndian.Uint16(body[off : off+2]))
+			cy := float32(binary.LittleEndian.Uint16(body[off+2 : off+4]))
+			off += 4
+			walls = append(walls, Wall{x: cx * cellSize, y: cy * cellSize, size: cellSize})
+		}
+		g.walls = walls
 	}
 }
 
