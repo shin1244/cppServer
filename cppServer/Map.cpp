@@ -40,12 +40,14 @@ void Map::PlaceRandomWalls(int wallCount, std::mt19937& rng) {
 bool Map::IsFullyConnected() const {
     int totalEmpty = 0;
     int startIdx = -1;
+
     for (int i = 0; i < width * height; i++) {
         if (cells[i] == 0) {
             totalEmpty++;
             if (startIdx == -1) startIdx = i;
         }
     }
+
     if (startIdx == -1) return false;
 
     std::vector<bool> visited(width * height, false);
@@ -69,17 +71,18 @@ bool Map::IsFullyConnected() const {
         for (int i = 0; i < 4; i++) {
             int nx = cx + dx[i];
             int ny = cy + dy[i];
-            
-            if (InBounds(nx, ny)) continue;
+
+            if (!InBounds(nx, ny)) continue;
+
             int nextIdx = CellIndex(nx, ny);
 
-            if (nextIdx >= 0 && nextIdx < width * height 
-                && !visited[nextIdx] && cells[nextIdx] == 0) {
-                visited[nextIdx] = true;
-                q.push(nextIdx);
-            }
+            if (visited[nextIdx] || cells[nextIdx] != 0) continue;
+
+            visited[nextIdx] = true;
+            q.push(nextIdx);
         }
     }
+
     return visitedCount == totalEmpty;
 }
 

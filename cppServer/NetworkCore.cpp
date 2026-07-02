@@ -32,7 +32,7 @@ void workerThread() {
             if (bytesTransferred == 0) {
                 RecvPacket recvPacket;
                 recvPacket.sessionIndex = session->index;
-                recvPacket.id = PacketId::Disconnect;
+                recvPacket.id = PacketId::Leave;
                 g_recvQueue.Push(std::move(recvPacket));
 
                 continue;
@@ -97,7 +97,7 @@ void Accepter(SOCKET s) {
 
         RecvPacket rp;
         rp.sessionIndex = index;
-        rp.id = PacketId::Connect;
+        rp.id = PacketId::Join;
         g_recvQueue.Push(rp);
 
         postRecv(session);

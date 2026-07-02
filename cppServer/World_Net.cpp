@@ -55,6 +55,7 @@ void World::HandleAttack(RecvPacket& packet) {
 }
 
 void World::HandleJoin(RecvPacket& packet) {
+    std::cout << "Join\n";
     int idx = FindEmptySlot();
     if (idx < 0) return;
 
@@ -73,6 +74,7 @@ void World::HandleJoin(RecvPacket& packet) {
 void World::TryStartMatch() {
     if (running) return;
     for (int i = 0; i < MAX_PLAYER; i++) {
+        std::cout << i + "\n";
         if (slots[i].state == SlotState::Empty) return;
     }
     for (int i = 0; i < MAX_PLAYER; i++) {

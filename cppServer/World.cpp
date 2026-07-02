@@ -5,8 +5,10 @@ void World::Init() {
     map.Generate(W, Y, WALL, MAX_PLAYER, SEED);
     const auto& spawns = map.GetSpawnPoints();
 
-    playerGrid.Init(W, Y, 100);
-    bulletGrid.Init(W, Y, 100);
+    float ww = map.GetWorldWidth();
+    float wh = map.GetWorldHeight();
+    playerGrid.Init(ww, wh, 100);
+    bulletGrid.Init(ww, wh, 100);
 
     for (int i = 0; i < MAX_PLAYER; i++) {
         slots[i].player.SetPos(spawns[i].x, spawns[i].y);
