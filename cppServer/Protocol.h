@@ -4,6 +4,19 @@
 #pragma pack(push, 1)
 struct PacketHeader { unsigned short size; unsigned short id; };
 
+struct WallPos {
+    unsigned short x, y;
+};
+
+struct MapSnapShot {
+    PacketHeader h;
+    unsigned short cellSize;
+    unsigned short width;
+    unsigned short height;
+    unsigned short wallCount;
+	WallPos walls[];
+};
+
 struct IdPacket {
     PacketHeader h;
     int id;
