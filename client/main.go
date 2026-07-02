@@ -42,13 +42,12 @@ const (
 	pktChat         = 11
 )
 
-// 서버 월드는 1000x1000 (World.h 의 W, Y). 화면을 월드와 1:1로 맞추면
-// 마우스 좌표 = 월드 좌표가 되어 사격 방향 계산이 정확해진다.
 const (
-	worldW  = 1000
-	worldH  = 1000
-	screenW = worldW
-	screenH = worldH
+	screenW = 720
+	screenH = 720
+
+	gridSize     = 100 // 서버 SpatialGrid 셀 크기와 동일 (내 주변 그리드 시각화)
+	visionRadius = 280 // 전장의 안개: 이 반경 밖은 검게
 )
 
 type PlayerView struct{ x, y float32 }
@@ -61,10 +60,14 @@ type Game struct {
 	players map[int32]*PlayerView
 	bullets map[int32]*BulletView
 
+	myID         int32
+	camX, camY   float32 // 카메라 좌상단(월드 좌표)
 	lastKeys     byte
 	prevMouse    bool
 	disconnected bool
 	errText      string
+
+	fog *ebiten.Image // 중앙에 원형 구멍이 뚫린 검은 오버레이 (정적)
 }
 
 func (g *Game) Update() error {
@@ -100,22 +103,41 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{245, 246, 248, 255})
-	drawGrid(screen)
 
 	g.mu.Lock()
+	// 카메라: 내 플레이어를 화면 중앙에 둔다. 아직 내 위치를 모르면 직전 값을 유지.
+	if me, ok := g.players[g.myID]; ok {
+		g.camX = me.x - screenW/2
+		g.camY = me.y - screenH/2
+	}
+	camX, camY := g.camX, g.camY
+
+	drawGrid(screen, camX, camY)
+
 	for id, p := range g.players {
-		vector.DrawFilledCircle(screen, p.x, p.y, 13, color.RGBA{20, 24, 31, 255}, true)
-		vector.DrawFilledCircle(screen, p.x, p.y, 10, colorFor(id), true)
+		sx, sy := p.x-camX, p.y-camY
+		vector.DrawFilledCircle(screen, sx, sy, 13, color.RGBA{20, 24, 31, 255}, true)
+		vector.DrawFilledCircle(screen, sx, sy, 10, colorFor(id), true)
+		if id == g.myID {
+			// 내 캐릭터 표시용 링
+			vector.StrokeCircle(screen, sx, sy, 17, 2, color.RGBA{20, 24, 31, 255}, true)
+		}
 	}
 	for _, b := range g.bullets {
-		vector.DrawFilledCircle(screen, b.x, b.y, 5, color.RGBA{20, 24, 31, 255}, true)
-		vector.DrawFilledCircle(screen, b.x, b.y, 4, color.RGBA{250, 205, 70, 255}, true)
+		sx, sy := b.x-camX, b.y-camY
+		vector.DrawFilledCircle(screen, sx, sy, 5, color.RGBA{20, 24, 31, 255}, true)
+		vector.DrawFilledCircle(screen, sx, sy, 4, color.RGBA{250, 205, 70, 255}, true)
 	}
+
 	nPlayers, nBullets := len(g.players), len(g.bullets)
+	myID := g.myID
 	disconnected, errText := g.disconnected, g.errText
 	g.mu.Unlock()
 
-	status := fmt.Sprintf("WASD 이동 | 좌클릭 사격 | players: %d | bullets: %d", nPlayers, nBullets)
+	// 전장의 안개: 중앙 원형만 남기고 나머지를 검게. (플레이어가 항상 중앙이라 정적 이미지 사용)
+	screen.DrawImage(g.fog, nil)
+
+	status := fmt.Sprintf("WASD 이동 | 좌클릭 사격 | myID: %d | players: %d | bullets: %d", myID, nPlayers, nBullets)
 	if disconnected {
 		status = "disconnected"
 		if errText != "" {
@@ -123,9 +145,16 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 	}
 	ebitenutil.DebugPrintAt(screen, status, 12, 12)
-	if nPlayers == 0 && !disconnected {
-		ebitenutil.DebugPrintAt(screen, "대기 중... 서버는 슬롯 4개가 모두 차야 매치가 시작됩니다 (클라 4개 접속 필요)", 12, 32)
+	if _, ok := hasMe(g, myID); !ok && !disconnected {
+		ebitenutil.DebugPrintAt(screen, "대기 중... 서버는 슬롯 4개가 모두 차야 매치가 시작됩니다", 12, 32)
 	}
+}
+
+func hasMe(g *Game, myID int32) (struct{}, bool) {
+	g.mu.Lock()
+	_, ok := g.players[myID]
+	g.mu.Unlock()
+	return struct{}{}, ok
 }
 
 func (g *Game) Layout(int, int) (int, int) { return screenW, screenH }
@@ -159,11 +188,20 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 	defer g.mu.Unlock()
 
 	switch id {
+	case pktConnect:
+		// 서버가 접속 클라에게 자기 id 를 알려주는 경우(현재 서버는 안 보냄, 향후 대비)
+		if pid, ok := readID(body); ok && g.myID < 0 {
+			g.myID = pid
+		}
+
 	case pktJoin:
-		// IdPacket{ int id } — 새 플레이어 등장. 위치는 이후 이동 패킷으로 채워진다.
+		// IdPacket{ int id }. 접속 직후 받는 첫 Join = 내 슬롯 idx.
 		if pid, ok := readID(body); ok {
+			if g.myID < 0 {
+				g.myID = pid
+			}
 			if _, exists := g.players[pid]; !exists {
-				g.players[pid] = &PlayerView{x: worldW / 2, y: worldH / 2}
+				g.players[pid] = &PlayerView{}
 			}
 		}
 
@@ -173,7 +211,7 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 		}
 
 	// 플레이어 관련. 서버 버그로 위치 갱신이 RemovePlayer id 로 오므로
-	// body 길이로 구분한다: 12바이트(Vec2Packet)면 이동, 4바이트(IdPacket)면 제거.
+	// body 길이로 구분: 12바이트(Vec2Packet)=이동, 4바이트(IdPacket)=제거.
 	case pktMovePlayer, pktRemovePlayer, pktHidePlayer:
 		if oid, x, y, ok := readVec2(body); ok {
 			p := g.players[oid]
@@ -186,7 +224,7 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 			delete(g.players, pid)
 		}
 
-	// 총알 관련. 마찬가지로 12바이트면 이동, 4바이트면 제거.
+	// 총알 관련. 12바이트=이동, 4바이트=제거.
 	case pktMoveBullet, pktRemoveBullet, pktHideBullet:
 		if oid, x, y, ok := readVec2(body); ok {
 			b := g.bullets[oid]
@@ -200,7 +238,6 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 		}
 
 	case pktAttack:
-		// AttackPacket 을 서버가 브로드캐스트하게 되면 여기서 총알 생성 처리.
 		if oid, x, y, ok := readVec2(body); ok {
 			g.bullets[oid] = &BulletView{x: x, y: y}
 		}
@@ -232,11 +269,17 @@ func (g *Game) sendMove(keys byte) {
 	g.writePacket(pktMovePlayer, []byte{keys})
 }
 
+// 마우스 클릭 지점을 월드 좌표로 변환해 사격 방향으로 보낸다(카메라 오프셋 보정).
 func (g *Game) sendAttack() {
 	mx, my := ebiten.CursorPosition()
+	g.mu.Lock()
+	worldX := float32(mx) + g.camX
+	worldY := float32(my) + g.camY
+	g.mu.Unlock()
+
 	body := make([]byte, 8)
-	binary.LittleEndian.PutUint32(body[0:4], math.Float32bits(float32(mx)))
-	binary.LittleEndian.PutUint32(body[4:8], math.Float32bits(float32(my)))
+	binary.LittleEndian.PutUint32(body[0:4], math.Float32bits(worldX))
+	binary.LittleEndian.PutUint32(body[4:8], math.Float32bits(worldY))
 	g.writePacket(pktAttack, body)
 }
 
@@ -259,13 +302,19 @@ func (g *Game) setDisconnected(err error) {
 
 // ---- 그리기 유틸 ----
 
-func drawGrid(screen *ebiten.Image) {
+// 카메라 오프셋에 맞춰 월드 격자선을 그린다.
+func drawGrid(screen *ebiten.Image, camX, camY float32) {
 	gridColor := color.RGBA{225, 228, 234, 255}
-	for x := float32(0); x <= screenW; x += 50 {
-		vector.StrokeLine(screen, x, 0, x, screenH, 1, gridColor, true)
+
+	startX := float32(math.Floor(float64(camX/gridSize))) * gridSize
+	for x := startX; x < camX+screenW; x += gridSize {
+		sx := x - camX
+		vector.StrokeLine(screen, sx, 0, sx, screenH, 1, gridColor, true)
 	}
-	for y := float32(0); y <= screenH; y += 50 {
-		vector.StrokeLine(screen, 0, y, screenW, y, 1, gridColor, true)
+	startY := float32(math.Floor(float64(camY/gridSize))) * gridSize
+	for y := startY; y < camY+screenH; y += gridSize {
+		sy := y - camY
+		vector.StrokeLine(screen, 0, sy, screenW, sy, 1, gridColor, true)
 	}
 }
 
@@ -277,6 +326,34 @@ func colorFor(id int32) color.Color {
 		color.RGBA{205, 155, 45, 255},
 	}
 	return palette[int(id)&3]
+}
+
+// 화면 중앙에 원형 구멍이 뚫린 검은 오버레이. 가장자리는 부드럽게 페이드.
+func makeFog() *ebiten.Image {
+	img := ebiten.NewImage(screenW, screenH)
+	pix := make([]byte, screenW*screenH*4)
+	cx, cy := float64(screenW)/2, float64(screenH)/2
+	const fade = 60.0 // 경계 페이드 폭
+	for y := 0; y < screenH; y++ {
+		for x := 0; x < screenW; x++ {
+			dx, dy := float64(x)-cx, float64(y)-cy
+			d := math.Sqrt(dx*dx + dy*dy)
+			var a float64
+			switch {
+			case d <= visionRadius-fade:
+				a = 0
+			case d >= visionRadius:
+				a = 255
+			default:
+				a = (d - (visionRadius - fade)) / fade * 255
+			}
+			i := (y*screenW + x) * 4
+			// 프리멀티플라이드 알파: 검정이라 RGB=0
+			pix[i+3] = byte(a)
+		}
+	}
+	img.WritePixels(pix)
+	return img
 }
 
 func main() {
@@ -294,14 +371,14 @@ func main() {
 		conn:    conn,
 		players: make(map[int32]*PlayerView),
 		bullets: make(map[int32]*BulletView),
+		myID:    -1,
+		fog:     makeFog(),
 	}
 
-	// 서버는 accept 시점에 자동으로 Join 을 처리하므로(NetworkCore.cpp)
-	// 클라에서 Join 을 또 보내면 슬롯을 2개 먹는다. 그래서 여기서는 보내지 않는다.
+	// 서버는 accept 시점에 자동 Join 을 처리하므로 클라에서 Join 을 또 보내지 않는다.
 	go game.receiveLoop()
 
-	// 창은 보기 편하게 축소, 렌더 해상도는 월드와 1:1(Layout)로 유지.
-	ebiten.SetWindowSize(720, 720)
+	ebiten.SetWindowSize(screenW, screenH)
 	ebiten.SetWindowTitle("cppServer test client")
 
 	if err := ebiten.RunGame(game); err != nil {

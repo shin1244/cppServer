@@ -7,8 +7,8 @@ void World::Init() {
 
     float ww = map.GetWorldWidth();
     float wh = map.GetWorldHeight();
-    playerGrid.Init(ww, wh, 100);
-    bulletGrid.Init(ww, wh, 100);
+    playerGrid.Init(ww, wh, 280);
+    bulletGrid.Init(ww, wh, 280);
 
     for (int i = 0; i < MAX_PLAYER; i++) {
         slots[i].player.SetPos(spawns[i].x, spawns[i].y);

@@ -39,5 +39,9 @@ void SpatialGrid::QueryNeighbors(float x, float y, std::vector<int>& out) const 
 int SpatialGrid::CellIndex(float x, float y) const {
 	int cx = int(x / cell);
 	int cy = int(y / cell);
+
+	if (cx < 0) cx = 0; else if (cx >= cols) cx = cols - 1;
+	if (cy < 0) cy = 0; else if (cy >= rows) cy = rows - 1;
+
 	return cy * cols + cx;
 }
