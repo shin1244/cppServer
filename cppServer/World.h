@@ -57,6 +57,7 @@ private:
     void RemoveBullet(int i);
     void Broadcast(const char* packet, int len);
     void SendTo(int idx, const char* packet, int len);
+    void BroadcastMapSnapshot();
 
     int FindEmptySlot();
     int FindSlotBySession(int sessionIndex);

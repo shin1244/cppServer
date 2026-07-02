@@ -8,13 +8,12 @@ struct WallPos {
     unsigned short x, y;
 };
 
-struct MapSnapShot {
+struct MapSnapHeader {
     PacketHeader h;
     unsigned short cellSize;
     unsigned short width;
     unsigned short height;
     unsigned short wallCount;
-	WallPos walls[];
 };
 
 struct IdPacket {
@@ -43,6 +42,7 @@ enum class PacketId : unsigned short {
     HidePlayer,
     HideBullet,
     Chat,
+    MapSnapshot,
 };
 
 const int HEADER_SIZE = 4;

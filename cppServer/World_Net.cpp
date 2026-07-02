@@ -84,6 +84,30 @@ void World::TryStartMatch() {
     running = true;
 }
 
+void World::BroadcastMapSnapshot() {
+    const auto& cells = map.GetCells();
+    int mw = map.GetWidthCells();
+
+    std::vector<WallPos> walls;                 // ← 수집용 로컬 (전송 X)
+    for (int i = 0; i < (int)cells.size(); i++)
+        if (cells[i] != 0)
+            walls.push_back({ (unsigned short)(i % mw), (unsigned short)(i / mw) });
+
+    unsigned short size = sizeof(MapSnapHeader) + (unsigned short)(walls.size() * sizeof(WallPos));
+    std::vector<char> buf(size);
+
+    auto* hdr = reinterpret_cast<MapSnapHeader*>(buf.data());
+	hdr->h.size = size;
+    hdr->h.id = (unsigned short)PacketId::MapSnapshot;
+	hdr->cellSize = (unsigned short)Map::CELL_SIZE;
+    hdr->width = (unsigned short)map.GetWidthCells();
+    hdr->height = (unsigned short)map.GetHeightCells();
+    hdr->wallCount = (unsigned short)walls.size();
+    memcpy(buf.data() + sizeof(MapSnapHeader), walls.data(), walls.size() * sizeof(WallPos));
+
+	Broadcast(buf.data(), size);
+}
+
 void World::HandleLeave(RecvPacket& packet) {
     int idx = FindSlotBySession(packet.sessionIndex);
     if (idx < 0) return;
