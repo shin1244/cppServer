@@ -36,6 +36,7 @@ private:
     static const int MAX_PLAYER = 4;
     static const int MAX_BULLETS = 1024;
 
+    bool running;
     Map map;
     PlayerSlot slots[MAX_PLAYER];
     Bullet bullets[MAX_BULLETS];
@@ -43,7 +44,7 @@ private:
     SpatialGrid bulletGrid;
 
     void HandleJoin(RecvPacket&);
-    void HandleDisconnect(RecvPacket&);
+    void HandleLeave(RecvPacket&);
     void HandleMove(RecvPacket&);
     void HandleAttack(RecvPacket&);
 
@@ -59,4 +60,5 @@ private:
 
     int FindEmptySlot();
     int FindSlotBySession(int sessionIndex);
+    void TryStartMatch();
 };

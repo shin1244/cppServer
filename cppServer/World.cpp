@@ -1,8 +1,12 @@
 #include"World.h"
 
 void World::Init() {
+    running = false;
     map.Generate(W, Y, WALL, MAX_PLAYER, SEED);
     const auto& spawns = map.GetSpawnPoints();
+
+    playerGrid.Init(W, Y, 100);
+    bulletGrid.Init(W, Y, 100);
 
     for (int i = 0; i < MAX_PLAYER; i++) {
         slots[i].player.SetPos(spawns[i].x, spawns[i].y);
@@ -10,6 +14,7 @@ void World::Init() {
 }
 
 void World::Update(float dt) {
+    if (!running) return;
     UpdatePlayers(dt);
     UpdateBullets(dt);
     UpdateGrid();
@@ -51,7 +56,7 @@ void World::SendAOIUpdates() {
 
         for (int target : visiblePlayers) {
             Vec2Packet p;
-			p.h.id = static_cast<unsigned short>(PacketId::Move);
+			p.h.id = static_cast<unsigned short>(PacketId::RemovePlayer);
             p.h.size = sizeof(Vec2Packet);
             p.id = target;
             p.x = slots[target].player.GetX();
@@ -65,8 +70,9 @@ void World::SendAOIUpdates() {
 
         for (int target : visibleBullets) {
             Vec2Packet p;
-			p.h.id = static_cast<unsigned short>(PacketId::Move);
+			p.h.id = static_cast<unsigned short>(PacketId::RemoveBullet);
             p.id = target;
+            p.h.size = sizeof(Vec2Packet);
             p.x = bullets[target].GetX();
             p.y = bullets[target].GetY();
 

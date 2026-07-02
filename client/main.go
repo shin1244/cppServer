@@ -27,14 +27,15 @@ const (
 const (
 	packetIDConnect      = 0
 	packetIDDisconnect   = 1
-	packetIDMove         = 2
-	packetIDAttack       = 3
-	packetIDRemovePlayer = 4
-	packetIDRemoveBullet = 5
-	packetIDHidePlayer   = 6
-	packetIDHideBullet   = 7
-	packetIDChat         = 8
-	packetIDJoin         = 9
+	packetIDJoin         = 2
+	packetIDLeave        = 3
+	packetIDMove         = 4
+	packetIDAttack       = 5
+	packetIDRemovePlayer = 6
+	packetIDRemoveBullet = 7
+	packetIDHidePlayer   = 8
+	packetIDHideBullet   = 9
+	packetIDChat         = 10
 )
 
 const (
@@ -251,24 +252,11 @@ func (g *Game) sendMove(keys byte) {
 }
 
 func (g *Game) sendMouseAttack() {
-	g.mu.Lock()
-	me := g.players[g.myID]
-	g.mu.Unlock()
-	if me == nil {
-		return
-	}
-
 	mouseX, mouseY := ebiten.CursorPosition()
-	dx := float32(mouseX) - me.x
-	dy := float32(mouseY) - me.y
-	length := float32(math.Sqrt(float64(dx*dx + dy*dy)))
-	if length == 0 {
-		return
-	}
 
 	body := make([]byte, 8)
-	binary.LittleEndian.PutUint32(body[0:4], math.Float32bits(dx/length))
-	binary.LittleEndian.PutUint32(body[4:8], math.Float32bits(dy/length))
+	binary.LittleEndian.PutUint32(body[0:4], math.Float32bits(float32(mouseX)))
+	binary.LittleEndian.PutUint32(body[4:8], math.Float32bits(float32(mouseY)))
 	g.writePacket(packetIDAttack, body)
 }
 

@@ -88,7 +88,7 @@ void Accepter(SOCKET s) {
             closesocket(clientSocket);
             continue;
         }
-        Session* session = &g_sessionList[index];
+        Session* session = &g_sessions[index];
 
         session->socket = clientSocket;
         session->index = index;

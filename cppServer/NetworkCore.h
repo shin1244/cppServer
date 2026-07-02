@@ -6,6 +6,7 @@
 #include "RingBuffer.h"
 #include "DoubleBuffer.h"
 #include "Protocol.h"
+#include "ObjectPool.h"
 #pragma comment(lib, "ws2_32.lib")
 
 struct Session {
@@ -27,7 +28,7 @@ struct Session {
 };
 
 extern HANDLE g_iocp;
-extern Session g_sessionList[1000];
+extern ObjectPool<Session, 1000> g_sessions;
 extern std::stack<int> g_freeIndices;
 extern DoubleBuffer<RecvPacket> g_recvQueue;
 
