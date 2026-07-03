@@ -26,7 +26,16 @@ void World::Update(float dt) {
 void World::UpdatePlayers(float dt) {
     for (int i = 0; i < MAX_PLAYER; i++) {
         if (slots[i].state != SlotState::Playing) continue;
+        float ox = slots[i].player.GetX();
+        float oy = slots[i].player.GetY();
+
         slots[i].player.Update(dt);
+
+        float cx = slots[i].player.GetX();
+        float cy = slots[i].player.GetY();
+        if (map.IsWall(cx, cy)) {
+            slots[i].player.SetPos(ox, oy);
+        }
     }
 }
 
@@ -34,6 +43,12 @@ void World::UpdateBullets(float dt) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bullets[i].IsActive()) continue;
         bullets[i].Update(dt);
+
+        float cx = bullets[i].GetX();
+        float cy = bullets[i].GetY();
+        if (map.IsWall(cx, cy)) {
+            RemoveBullet(i);
+        }
     }
 }
 
