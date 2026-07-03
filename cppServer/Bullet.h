@@ -7,7 +7,7 @@ private:
     float y = 0;
     float dirX = 0;
     float dirY = 0;
-    float speed = 700.0f;
+    float speed = 900.0f;
 public:
 	// 총알을 발사합니다. owner는 발사한 플레이어의 인덱스, startX와 startY는 발사 위치, dx와 dy는 방향 벡터입니다.
     void Fire(float startX, float startY, float dx, float dy);

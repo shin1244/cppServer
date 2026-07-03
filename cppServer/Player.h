@@ -5,6 +5,8 @@ private:
     float x = 0, y = 0;
     unsigned char keys = 0;
     float PLAYER_SPEED = 300.0f;
+    float fireCooldown = 0.0f;
+    static constexpr float FIRE_INTERVAL = 0.50f;
 
 public:
 	// 플레이어의 입력 키를 설정합니다.
@@ -19,4 +21,7 @@ public:
     float GetX() const;
 	// 플레이어의 현재 y 좌표를 반환합니다.
     float GetY() const;
+    // 플레이어가 사격할 수 있는 상태인지 확인합니다.
+    bool CanFire() const { return fireCooldown <= 0.0f; }
+    void StartFireCooldown() { fireCooldown = FIRE_INTERVAL; }
 };

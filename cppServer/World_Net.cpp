@@ -33,6 +33,7 @@ void World::HandleAttack(RecvPacket& packet) {
     if (packet.body.size() < sizeof(float) * 2) return;
     int idx = FindSlotBySession(packet.sessionIndex);
     if (idx < 0 || slots[idx].state != SlotState::Playing) return;
+    if (!slots[idx].player.CanFire()) return;
 
     float targetX, targetY;
     memcpy(&targetX, packet.body.data(), sizeof(float));
@@ -50,6 +51,7 @@ void World::HandleAttack(RecvPacket& packet) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (bullets[i].IsActive()) continue;
         bullets[i].Fire(px, py, dx, dy);
+        slots[idx].player.StartFireCooldown();
         break;
     }
 }

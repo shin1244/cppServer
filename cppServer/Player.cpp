@@ -3,6 +3,8 @@
 void Player::SetKeys(unsigned char k) { keys = k; }
 
 void Player::Update(float dt) {
+    if (fireCooldown > 0.0f) fireCooldown -= dt; // 사격 쿨타임
+
     float dx = 0, dy = 0;
     if (keys & 0x01) dy -= 1;
     if (keys & 0x02) dy += 1;
