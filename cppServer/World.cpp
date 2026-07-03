@@ -22,6 +22,7 @@ void World::Update(float dt) {
     UpdateBullets(dt);
     UpdateGrid();
     Collision();
+    CheckMatchEnd();
     SendAOIUpdates();
 }
 
@@ -114,6 +115,22 @@ void World::Collision() {
                 std::cout << "Kill!" << i << "\n";
             }
         }
+    }
+}
+
+void World::CheckMatchEnd() {
+    int alive = 0, winner = -1;
+    for (int i = 0; i < MAX_PLAYER; ++i)
+        if (slots[i].state == SlotState::Playing) { alive++; winner = i; }
+
+    if (alive <= 1) {
+        running = false;
+        IdPacket p;
+        p.h.id = static_cast<unsigned short>(PacketId::End);
+        p.h.size = sizeof(IdPacket);
+        p.id = winner;
+
+        Broadcast((char*)&p, p.h.size);
     }
 }
 

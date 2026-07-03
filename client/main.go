@@ -44,6 +44,7 @@ const (
 	pktMapSnapshot  = 12
 	pktDestroy      = 13
 	pktObserve      = 14
+	pktEnd          = 15
 )
 
 const (
@@ -72,6 +73,8 @@ type Game struct {
 
 	myID         int32
 	spectateID   int32   // 관전 중 따라갈 대상 슬롯 id (없으면 -1)
+	matchOver    bool    // 매치 종료 여부
+	winnerID     int32   // 승자 슬롯 id (무승부면 -1)
 	camX, camY   float32 // 카메라 좌상단(월드 좌표)
 	lastKeys     byte
 	prevMouse    bool
@@ -189,6 +192,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	myID := g.myID
 	spectating := followID != g.myID
 	disconnected, errText := g.disconnected, g.errText
+	matchOver, winnerID := g.matchOver, g.winnerID
 	g.mu.Unlock()
 
 	// 벽에 가려진(시야 밖) 셀을 어둡게 덮는다. (셀 그림자캐스팅 결과)
@@ -210,8 +214,23 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 	}
 	ebitenutil.DebugPrintAt(screen, status, 12, 12)
-	if _, ok := hasMe(g, myID); !ok && !disconnected && !spectating {
+	if _, ok := hasMe(g, myID); !ok && !disconnected && !spectating && !matchOver {
 		ebitenutil.DebugPrintAt(screen, "대기 중... 서버는 슬롯 4개가 모두 차야 매치가 시작됩니다", 12, 32)
+	}
+
+	// 매치 종료 배너
+	if matchOver {
+		vector.DrawFilledRect(screen, 0, screenH/2-40, screenW, 80, color.RGBA{0, 0, 0, 200}, false)
+		var msg string
+		switch {
+		case winnerID < 0:
+			msg = "매치 종료 — 무승부"
+		case winnerID == myID:
+			msg = "매치 종료 — 승리!"
+		default:
+			msg = fmt.Sprintf("매치 종료 — 승자 id: %d", winnerID)
+		}
+		ebitenutil.DebugPrintAt(screen, msg, screenW/2-len(msg)*3, screenH/2-4)
 	}
 }
 
@@ -352,6 +371,13 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 		// IdPacket: 내가 죽어 관전자가 되었을 때(또는 대상 순환 시) 따라갈 대상 슬롯 id
 		if pid, ok := readID(body); ok {
 			g.spectateID = pid
+		}
+
+	case pktEnd:
+		// IdPacket: 매치 종료. id = 승자 슬롯(무승부면 -1)
+		if pid, ok := readID(body); ok {
+			g.matchOver = true
+			g.winnerID = pid
 		}
 	}
 }
@@ -656,6 +682,7 @@ func main() {
 		bullets:    make(map[int32]*BulletView),
 		myID:       -1,
 		spectateID: -1,
+		winnerID:   -1,
 		fog:        makeFog(),
 	}
 

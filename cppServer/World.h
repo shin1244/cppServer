@@ -56,10 +56,12 @@ private:
     void HandleAttack(RecvPacket&);
     void HandleObserve(RecvPacket&);
 
+    // - UPDATE FLOW -
     void UpdatePlayers(float dt);
     void UpdateBullets(float dt);
     void UpdateGrid();
     void Collision();
+    void CheckMatchEnd();
     void SendAOIUpdates();
 
     void RemovePlayer(int i);

@@ -44,7 +44,8 @@ enum class PacketId : unsigned short {
     Chat,
     MapSnapshot,
     Destroy,
-    Observe,   // 관전자에게 따라갈 대상 슬롯 id 를 알려준다 (IdPacket)
+    Observe,
+    End,
 };
 
 const int HEADER_SIZE = 4;
