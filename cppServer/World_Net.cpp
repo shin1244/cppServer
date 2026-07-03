@@ -15,6 +15,9 @@ void World::HandlePacket(RecvPacket& packet) {
     case PacketId::Leave:
         HandleLeave(packet);
         break;
+    case PacketId::Observe:
+        HandleObserve(packet);
+        break;
     default:
         break;
     }
@@ -73,6 +76,33 @@ void World::HandleJoin(RecvPacket& packet) {
     TryStartMatch();
 }
 
+void World::HandleLeave(RecvPacket& packet) {
+    int idx = FindSlotBySession(packet.sessionIndex);
+    if (idx < 0) return;
+    std::cout << "LEAVE" << idx << "\n";
+    slots[idx].state = SlotState::Empty;
+    slots[idx].sessionIndex = -1;
+
+    RemovePlayer(idx);
+
+    IdPacket p;
+    p.h.size = sizeof(IdPacket);
+    p.h.id = static_cast<unsigned short>(PacketId::Leave);
+    p.id = idx;
+
+    Broadcast((const char*)&p, p.h.size);
+}
+
+void World::HandleObserve(RecvPacket& packet) {
+    int idx = FindSlotBySession(packet.sessionIndex);
+    if (idx < 0) return;
+    if (slots[idx].state != SlotState::Observing) return; // ê´€ì „ ì¤‘ì¼ ë•Œë§Œ ëŒ€ìƒ ìˆœí™˜
+
+    int target = FindNextPlayingSlot(slots[idx].target);
+    if (target < 0) return; // ìˆœí™˜í•  ë‹¤ë¥¸ Playing ëŒ€ìƒì´ ì—†ìŒ
+    ObservePlayer(idx, target);
+}
+
 void World::TryStartMatch() {
     if (running) return;
     for (int i = 0; i < MAX_PLAYER; i++) {
@@ -99,7 +129,7 @@ void World::BroadcastMapSnapshot() {
     unsigned short size = sizeof(MapSnapHeader) + (unsigned short)(walls.size() * sizeof(WallPos));
     std::vector<char> buf(size);
 
-    auto* hdr = reinterpret_cast<MapSnapHeader*>(buf.data()); // °­Á¦ Çüº¯È¯À¸·Î ÆÐÅ¶ ÇüÅÂ·Î Á¦ÀÛ
+    auto* hdr = reinterpret_cast<MapSnapHeader*>(buf.data()); // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½È¯ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Å¶ ï¿½ï¿½ï¿½Â·ï¿½ ï¿½ï¿½ï¿½ï¿½
 	hdr->h.size = size;
     hdr->h.id = (unsigned short)PacketId::MapSnapshot;
 	hdr->cellSize = (unsigned short)Map::CELL_SIZE;
@@ -111,22 +141,7 @@ void World::BroadcastMapSnapshot() {
 	Broadcast(buf.data(), size);
 }
 
-void World::HandleLeave(RecvPacket& packet) {
-    int idx = FindSlotBySession(packet.sessionIndex);
-    if (idx < 0) return;
-    std::cout << "LEAVE" << idx << "\n";
-    slots[idx].state = SlotState::Empty;
-    slots[idx].sessionIndex = -1;
 
-    RemovePlayer(idx);
-
-    IdPacket p;
-    p.h.size = sizeof(IdPacket);
-    p.h.id = static_cast<unsigned short>(PacketId::Leave);
-    p.id = idx;
-
-    Broadcast((const char*)&p, p.h.size);
-}
 
 void World::Broadcast(const char* packet, int len) {
     for (int i = 0; i < MAX_PLAYER; ++i) {

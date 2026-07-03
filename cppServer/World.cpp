@@ -1,4 +1,5 @@
 #include"World.h"
+#include <algorithm>
 
 void World::Init() {
     running = false;
@@ -98,6 +99,16 @@ void World::Collision() {
             float r = PLAYER_RADIUS + BULLET_RADIUS;
             if (dx * dx + dy * dy <= r * r) {
                 slots[i].state = SlotState::Observing;
+                int target = FindNextPlayingSlot(i);
+
+                slots[i].observers.clear();
+
+                slots[i].target = -1;      // 피격 직전 Playing 상태였으니 관전 대상 없음
+                ObservePlayer(i, target);  // 피격자를 관전자로 전환
+                for (int ob : slots[i].observers) {
+                    ObservePlayer(ob, target); // 피격자를 보던 관전자들도 새 대상으로
+                }
+
                 RemovePlayer(i);
                 RemoveBullet(b);
                 std::cout << "Kill!" << i << "\n";
@@ -129,6 +140,7 @@ void World::SendAOIUpdates() {
             p.y = slots[target].player.GetY();
 
             SendTo(i, (char*)&p, p.h.size);
+            for (int ob : slots[i].observers) SendTo(ob, (char*)&p, p.h.size);
         }
 
         std::vector<int> visibleBullets;
@@ -148,6 +160,7 @@ void World::SendAOIUpdates() {
             p.y = bullets[target].GetY();
 
             SendTo(i, (char*)&p, p.h.size);
+            for (int ob : slots[i].observers) SendTo(ob, (char*)&p, p.h.size);
         }
     }
 }
@@ -155,6 +168,16 @@ void World::SendAOIUpdates() {
 int World::FindEmptySlot() {
     for (int i = 0; i < MAX_PLAYER; ++i) {
         if (slots[i].state == SlotState::Empty) return i;
+    }
+    return -1;
+}
+
+int World::FindNextPlayingSlot(int idx) {
+    for (int i = 1; i < MAX_PLAYER; ++i) {
+        int next_idx = (idx + i) % MAX_PLAYER;
+        if (slots[next_idx].state == SlotState::Playing) {
+            return next_idx;
+        }
     }
     return -1;
 }
@@ -184,4 +207,24 @@ void World::RemoveBullet(int i) {
     p.id = i;
 
     Broadcast((char*)&p, p.h.size);
+}
+
+void World::ObservePlayer(int observerIdx, int targetIdx) {
+    if (targetIdx < 0) return;
+
+    int prev = slots[observerIdx].target;
+    if (prev >= 0) {
+        auto& obs = slots[prev].observers;
+        obs.erase(std::remove(obs.begin(), obs.end(), observerIdx), obs.end());
+    }
+
+    slots[targetIdx].observers.push_back(observerIdx);
+    slots[observerIdx].target = targetIdx;
+
+    IdPacket sp;
+    sp.h.size = sizeof(IdPacket);
+    sp.h.id = static_cast<unsigned short>(PacketId::Observe);
+    sp.id = targetIdx;
+
+    SendTo(observerIdx, (char*)&sp, sp.h.size);
 }

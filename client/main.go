@@ -43,6 +43,7 @@ const (
 	pktChat         = 11
 	pktMapSnapshot  = 12
 	pktDestroy      = 13
+	pktObserve      = 14
 )
 
 const (
@@ -70,6 +71,7 @@ type Game struct {
 	cols, rows     int             // 맵 셀 개수
 
 	myID         int32
+	spectateID   int32   // 관전 중 따라갈 대상 슬롯 id (없으면 -1)
 	camX, camY   float32 // 카메라 좌상단(월드 좌표)
 	lastKeys     byte
 	prevMouse    bool
@@ -104,7 +106,15 @@ func (g *Game) Update() error {
 
 	mouseDown := ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)
 	if mouseDown && !g.prevMouse {
-		g.sendAttack()
+		g.mu.Lock()
+		_, alive := g.players[g.myID]
+		spectating := !alive && g.spectateID >= 0
+		g.mu.Unlock()
+		if spectating {
+			g.sendObserve() // 관전 중 클릭 = 다음 대상으로 순환
+		} else {
+			g.sendAttack()
+		}
 	}
 	g.prevMouse = mouseDown
 	return nil
@@ -115,8 +125,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{16, 18, 22, 255})
 
 	g.mu.Lock()
-	// 카메라: 내 플레이어를 화면 중앙에 둔다. 아직 내 위치를 모르면 직전 값을 유지.
-	if me, ok := g.players[g.myID]; ok {
+	// 시점 대상: 내가 살아있으면 나, 죽어서 관전 중이면 관전 대상.
+	followID := g.myID
+	if _, ok := g.players[g.myID]; !ok && g.spectateID >= 0 {
+		followID = g.spectateID
+	}
+
+	// 카메라: 시점 대상을 화면 중앙에 둔다. 위치를 모르면 직전 값을 유지.
+	if me, ok := g.players[followID]; ok {
 		g.camX = me.x - screenW/2
 		g.camY = me.y - screenH/2
 	}
@@ -124,10 +140,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	worldW, worldH := g.worldW, g.worldH
 	cellSize := g.cellSize
 
-	// 그림자캐스팅으로 내 시야에 들어오는 셀 집합 계산 (벽 뒤는 제외)
+	// 그림자캐스팅으로 시점 대상의 시야에 들어오는 셀 집합 계산 (벽 뒤는 제외)
 	var visible map[[2]int]bool
 	if cellSize > 0 {
-		if me, ok := g.players[g.myID]; ok {
+		if me, ok := g.players[followID]; ok {
 			mcx := int(math.Floor(float64(me.x / cellSize)))
 			mcy := int(math.Floor(float64(me.y / cellSize)))
 			radCells := int(float32(visionRadius)/cellSize) + 1
@@ -158,8 +174,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		sx, sy := p.x-camX, p.y-camY
 		vector.DrawFilledCircle(screen, sx, sy, 13, color.RGBA{20, 24, 31, 255}, true)
 		vector.DrawFilledCircle(screen, sx, sy, 10, colorFor(id), true)
-		if id == g.myID {
-			// 내 캐릭터 표시용 링
+		if id == followID {
+			// 시점 대상(나 또는 관전 대상) 표시용 링
 			vector.StrokeCircle(screen, sx, sy, 17, 2, color.RGBA{20, 24, 31, 255}, true)
 		}
 	}
@@ -171,6 +187,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	nPlayers, nBullets := len(g.players), len(g.bullets)
 	myID := g.myID
+	spectating := followID != g.myID
 	disconnected, errText := g.disconnected, g.errText
 	g.mu.Unlock()
 
@@ -183,6 +200,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.DrawImage(g.fog, nil)
 
 	status := fmt.Sprintf("WASD 이동 | 좌클릭 사격 | myID: %d | players: %d | bullets: %d", myID, nPlayers, nBullets)
+	if spectating {
+		status = fmt.Sprintf("관전 중 (대상 id: %d) | 좌클릭: 다음 대상 | players: %d | bullets: %d", followID, nPlayers, nBullets)
+	}
 	if disconnected {
 		status = "disconnected"
 		if errText != "" {
@@ -190,7 +210,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 	}
 	ebitenutil.DebugPrintAt(screen, status, 12, 12)
-	if _, ok := hasMe(g, myID); !ok && !disconnected {
+	if _, ok := hasMe(g, myID); !ok && !disconnected && !spectating {
 		ebitenutil.DebugPrintAt(screen, "대기 중... 서버는 슬롯 4개가 모두 차야 매치가 시작됩니다", 12, 32)
 	}
 }
@@ -327,6 +347,12 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 		if _, x, y, ok := readVec2(body); ok {
 			g.removeWallAt(x, y)
 		}
+
+	case pktObserve:
+		// IdPacket: 내가 죽어 관전자가 되었을 때(또는 대상 순환 시) 따라갈 대상 슬롯 id
+		if pid, ok := readID(body); ok {
+			g.spectateID = pid
+		}
 	}
 }
 
@@ -369,6 +395,11 @@ func readVec2(body []byte) (id int32, x, y float32, ok bool) {
 
 func (g *Game) sendMove(keys byte) {
 	g.writePacket(pktMovePlayer, []byte{keys})
+}
+
+// 관전 대상 순환 요청. 서버가 다음 Playing 슬롯을 골라 Observe 로 되돌려준다.
+func (g *Game) sendObserve() {
+	g.writePacket(pktObserve, nil)
 }
 
 // 마우스 클릭 지점을 월드 좌표로 변환해 사격 방향으로 보낸다(카메라 오프셋 보정).
@@ -621,10 +652,11 @@ func main() {
 
 	game := &Game{
 		conn:    conn,
-		players: make(map[int32]*PlayerView),
-		bullets: make(map[int32]*BulletView),
-		myID:    -1,
-		fog:     makeFog(),
+		players:    make(map[int32]*PlayerView),
+		bullets:    make(map[int32]*BulletView),
+		myID:       -1,
+		spectateID: -1,
+		fog:        makeFog(),
 	}
 
 	// 서버는 accept 시점에 자동 Join 을 처리하므로 클라에서 Join 을 또 보내지 않는다.

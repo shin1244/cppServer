@@ -8,6 +8,9 @@
 #include"Map.h"
 #include"SpatialGrid.h"
 
+constexpr int MAX_PLAYER = 4;
+constexpr int MAX_BULLETS = 1024;
+
 enum class SlotState {
     Empty,
     Waiting,
@@ -15,9 +18,13 @@ enum class SlotState {
     Observing,
 };
 
-struct PlayerSlot {
+struct PlayerSlot
+{
     int sessionIndex = -1;
     SlotState state = SlotState::Empty;
+
+    std::vector<int> observers;
+    int target = -1;
 
     Player player;
 };
@@ -33,8 +40,6 @@ private:
     static const int Y = 50;
     static const int WALL = 400;
     static const int SEED = 1234;
-    static const int MAX_PLAYER = 4;
-    static const int MAX_BULLETS = 1024;
     static constexpr float PLAYER_RADIUS = 10.0f;
     static constexpr float BULLET_RADIUS = 4.0f;
 
@@ -49,6 +54,7 @@ private:
     void HandleLeave(RecvPacket&);
     void HandleMove(RecvPacket&);
     void HandleAttack(RecvPacket&);
+    void HandleObserve(RecvPacket&);
 
     void UpdatePlayers(float dt);
     void UpdateBullets(float dt);
@@ -63,6 +69,8 @@ private:
     void BroadcastMapSnapshot();
 
     int FindEmptySlot();
+    int FindNextPlayingSlot(int idx);
     int FindSlotBySession(int sessionIndex);
     void TryStartMatch();
+    void ObservePlayer(int observerIdx, int targetIdx);
 };
