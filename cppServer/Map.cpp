@@ -32,7 +32,7 @@ void Map::PlaceRandomWalls(int wallCount, std::mt19937& rng) {
 
         if (cells[idx] != 0) continue;
 
-        cells[idx] = 10;
+        cells[idx] = 1;
         placed++;
     }
 }
@@ -119,8 +119,12 @@ bool Map::DamageWall(float worldX, float worldY) {
     return cells[idx] == 0;
 }
 
-int  Map::WorldToCellX(float worldX) const { return static_cast<int>(worldX / CELL_SIZE); }
-int  Map::WorldToCellY(float worldY) const { return static_cast<int>(worldY / CELL_SIZE); }
+int  Map::WorldToCellX(float worldX) const { 
+    return static_cast<int>(std::floor(worldX / CELL_SIZE));
+}
+int  Map::WorldToCellY(float worldY) const { 
+    return static_cast<int>(std::floor(worldY / CELL_SIZE));
+}
 bool Map::InBounds(int cx, int cy) const { return cx >= 0 && cx < width && cy >= 0 && cy < height; }
 bool Map::IsWallCell(int cx, int cy) const {
     if (!InBounds(cx, cy)) return true; 

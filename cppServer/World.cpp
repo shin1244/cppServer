@@ -20,6 +20,7 @@ void World::Update(float dt) {
     UpdatePlayers(dt);
     UpdateBullets(dt);
     UpdateGrid();
+    Collision();
     SendAOIUpdates();
 }
 
@@ -48,6 +49,15 @@ void World::UpdateBullets(float dt) {
         float cy = bullets[i].GetY();
         if (map.IsWall(cx, cy)) {
             RemoveBullet(i);
+            if (map.DamageWall(cx, cy)) {
+                Vec2Packet p;
+                p.h.id = static_cast<unsigned short>(PacketId::Destroy);
+                p.h.size = sizeof(Vec2Packet);
+                p.x = cx;
+                p.y = cy;
+
+                Broadcast((char*)&p, p.h.size);
+            }
         }
     }
 }
@@ -65,6 +75,33 @@ void World::UpdateGrid() {
     }
 }
 
+void World::Collision() {
+    for (int i = 0; i < MAX_PLAYER; ++i) {
+        if (slots[i].state != SlotState::Playing) continue;
+        float px = slots[i].player.GetX();
+        float py = slots[i].player.GetY();
+
+        std::vector<int> nearBullets;
+        bulletGrid.QueryNeighbors(
+            px,
+            py, 
+            nearBullets
+        );
+        for (int b : nearBullets) {
+            if (!bullets[b].IsActive()) continue;
+            float dx = px - bullets[b].GetX();
+            float dy = py - bullets[b].GetY();
+            float r = PLAYER_RADIUS + BULLET_RADIUS;
+            if (dx * dx + dy * dy <= r * r) {
+                slots[i].state = SlotState::Observing;
+                RemovePlayer(i);
+                RemoveBullet(b);
+                std::cout << "Kill!" << i << "\n";
+            }
+        }
+    }
+}
+
 void World::SendAOIUpdates() {
     for (int i = 0; i < MAX_PLAYER; ++i) {
         if (slots[i].state != SlotState::Playing) continue;
@@ -72,8 +109,9 @@ void World::SendAOIUpdates() {
         playerGrid.QueryNeighbors(slots[i].player.GetX(), slots[i].player.GetY(), visiblePlayers);
 
         for (int target : visiblePlayers) {
+            if (slots[target].state != SlotState::Playing) continue;
             Vec2Packet p;
-			p.h.id = static_cast<unsigned short>(PacketId::RemovePlayer);
+			p.h.id = static_cast<unsigned short>(PacketId::MovePlayer);
             p.h.size = sizeof(Vec2Packet);
             p.id = target;
             p.x = slots[target].player.GetX();
@@ -86,8 +124,10 @@ void World::SendAOIUpdates() {
         bulletGrid.QueryNeighbors(slots[i].player.GetX(), slots[i].player.GetY(), visibleBullets);
 
         for (int target : visibleBullets) {
+            if (!bullets[target].IsActive()) continue;
+
             Vec2Packet p;
-			p.h.id = static_cast<unsigned short>(PacketId::RemoveBullet);
+			p.h.id = static_cast<unsigned short>(PacketId::MoveBullet);
             p.id = target;
             p.h.size = sizeof(Vec2Packet);
             p.x = bullets[target].GetX();

@@ -43,6 +43,7 @@ enum class PacketId : unsigned short {
     HideBullet,
     Chat,
     MapSnapshot,
+    Destroy,
 };
 
 const int HEADER_SIZE = 4;

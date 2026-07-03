@@ -97,7 +97,7 @@ void World::BroadcastMapSnapshot() {
     unsigned short size = sizeof(MapSnapHeader) + (unsigned short)(walls.size() * sizeof(WallPos));
     std::vector<char> buf(size);
 
-    auto* hdr = reinterpret_cast<MapSnapHeader*>(buf.data());
+    auto* hdr = reinterpret_cast<MapSnapHeader*>(buf.data()); // 강제 형변환으로 패킷 형태로 제작
 	hdr->h.size = size;
     hdr->h.id = (unsigned short)PacketId::MapSnapshot;
 	hdr->cellSize = (unsigned short)Map::CELL_SIZE;
@@ -112,6 +112,7 @@ void World::BroadcastMapSnapshot() {
 void World::HandleLeave(RecvPacket& packet) {
     int idx = FindSlotBySession(packet.sessionIndex);
     if (idx < 0) return;
+    std::cout << "LEAVE" << idx << "\n";
     slots[idx].state = SlotState::Empty;
     slots[idx].sessionIndex = -1;
 

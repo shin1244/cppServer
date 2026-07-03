@@ -31,10 +31,12 @@ public:
 private:
     static const int W = 20;
     static const int Y = 20;
-    static const int WALL = 100;
+    static const int WALL = 50;
     static const int SEED = 1234;
     static const int MAX_PLAYER = 4;
     static const int MAX_BULLETS = 1024;
+    static constexpr float PLAYER_RADIUS = 10.0f;
+    static constexpr float BULLET_RADIUS = 4.0f;
 
     bool running;
     Map map;
@@ -51,6 +53,7 @@ private:
     void UpdatePlayers(float dt);
     void UpdateBullets(float dt);
     void UpdateGrid();
+    void Collision();
     void SendAOIUpdates();
 
     void RemovePlayer(int i);
