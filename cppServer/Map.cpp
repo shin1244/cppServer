@@ -140,7 +140,7 @@ bool Map::HasLineOfSight(float x0, float y0, float x1, float y1) const
     int tx = WorldToCellX(x1);
     int ty = WorldToCellY(y1);
 
-    // ���� ���̶�� �ٷ� ����
+    // 같은 셀이라면 바로 보임
     if (cx == tx && cy == ty)
         return true;
 
@@ -184,64 +184,12 @@ bool Map::HasLineOfSight(float x0, float y0, float x1, float y1) const
             tMaxY += tDeltaY;
         }
 
-        // ������ ���� ����
+        // 목적지 셀에 도착
         if (cx == tx && cy == ty)
             return true;
 
-        // �߰� ���� ���̸� �þ� ����
+        // 중간 셀이 벽이면 시야 차단
         if (IsWallCell(cx, cy))
             return false;
     }
-}
-
-// 선분이 지나는 셀을 순서대로 밟으며 첫 벽을 찾는다.
-// 정확히 대각 코너를 지날 때 양옆이 모두 벽이면 통과를 막는다.
-bool Map::SegmentHitsWall(float x0, float y0, float x1, float y1,
-    int& hitCx, int& hitCy) const {
-    int cx = WorldToCellX(x0), cy = WorldToCellY(y0);
-    int tx = WorldToCellX(x1), ty = WorldToCellY(y1);
-
-    // 출발 셀이 이미 벽이면 즉시 히트
-    if (IsWallCell(cx, cy)) { hitCx = cx; hitCy = cy; return true; }
-    if (cx == tx && cy == ty) return false;
-
-    float dx = x1 - x0, dy = y1 - y0;
-    int stepX = (dx > 0) - (dx < 0);
-    int stepY = (dy > 0) - (dy < 0);
-
-    const float INF = std::numeric_limits<float>::infinity();
-    float adx = std::abs(dx), ady = std::abs(dy);
-
-    float tDeltaX = (stepX != 0) ? CELL_SIZE / adx : INF;
-    float tDeltaY = (stepY != 0) ? CELL_SIZE / ady : INF;
-
-    float tMaxX = (stepX > 0) ? ((cx + 1) * CELL_SIZE - x0) / adx
-        : (stepX < 0) ? (x0 - cx * CELL_SIZE) / adx : INF;
-    float tMaxY = (stepY > 0) ? ((cy + 1) * CELL_SIZE - y0) / ady
-        : (stepY < 0) ? (y0 - cy * CELL_SIZE) / ady : INF;
-
-    int guard = std::abs(tx - cx) + std::abs(ty - cy) + 2;
-    const float EPS = 1e-4f;
-
-    while (cx != tx || cy != ty) {
-        if (stepX != 0 && stepY != 0 && std::abs(tMaxX - tMaxY) < EPS) {
-            // 정확히 대각 코너 통과: 양쪽 셀이 모두 벽이면 이음새를 막는다
-            if (IsWallCell(cx + stepX, cy) && IsWallCell(cx, cy + stepY)) {
-                hitCx = cx + stepX; hitCy = cy;
-                return true;
-            }
-            cx += stepX; cy += stepY;
-            tMaxX += tDeltaX; tMaxY += tDeltaY;
-        }
-        else if (tMaxX < tMaxY) {
-            cx += stepX; tMaxX += tDeltaX;
-        }
-        else {
-            cy += stepY; tMaxY += tDeltaY;
-        }
-
-        if (IsWallCell(cx, cy)) { hitCx = cx; hitCy = cy; return true; }
-        if (--guard <= 0) break;
-    }
-    return false;
 }

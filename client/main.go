@@ -18,7 +18,8 @@ import (
 )
 
 // 입력 키 비트 (서버 Player::Update 와 동일)
-//   0x01 up / 0x02 down / 0x04 left / 0x08 right
+//
+//	0x01 up / 0x02 down / 0x04 left / 0x08 right
 const (
 	keyUp    = 1 << 0
 	keyDown  = 1 << 1
@@ -59,9 +60,9 @@ type Wall struct{ x, y, size float32 } // 월드 좌표 기준 좌상단 + 한 �
 type Game struct {
 	conn net.Conn
 
-	mu      sync.Mutex
-	players  map[int32]*PlayerView
-	bullets  map[int32]*BulletView
+	mu             sync.Mutex
+	players        map[int32]*PlayerView
+	bullets        map[int32]*BulletView
 	walls          []Wall
 	cellSize       float32
 	worldW, worldH float32         // 맵 필드의 월드 크기 (width*cellSize)

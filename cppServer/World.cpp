@@ -34,34 +34,31 @@ void World::UpdatePlayers(float dt) {
 
         float cx = slots[i].player.GetX();
         float cy = slots[i].player.GetY();
-        if (map.IsWall(cx, cy)) {
-            slots[i].player.SetPos(ox, oy);
+        if (map.IsWall(cx, oy)) {
+            cx = ox;
         }
+        if (map.IsWall(cx, cy)) {
+            cy = oy;
+        }
+        slots[i].player.SetPos(cx, cy);
     }
 }
 
 void World::UpdateBullets(float dt) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bullets[i].IsActive()) continue;
-
-        float ox = bullets[i].GetX();
-        float oy = bullets[i].GetY();
         bullets[i].Update(dt);
-        float nx = bullets[i].GetX();
-        float ny = bullets[i].GetY();
 
-        // 이전->현재 위치 경로 전체를 검사 (점 샘플링 관통/대각 코너 통과 방지)
-        int hitCx, hitCy;
-        if (map.SegmentHitsWall(ox, oy, nx, ny, hitCx, hitCy)) {
+        float cx = bullets[i].GetX();
+        float cy = bullets[i].GetY();
+        if (map.IsWall(cx, cy)) {
             RemoveBullet(i);
-            float wx = (hitCx + 0.5f) * Map::CELL_SIZE;
-            float wy = (hitCy + 0.5f) * Map::CELL_SIZE;
-            if (map.DamageWall(wx, wy)) {
+            if (map.DamageWall(cx, cy)) {
                 Vec2Packet p;
                 p.h.id = static_cast<unsigned short>(PacketId::Destroy);
                 p.h.size = sizeof(Vec2Packet);
-                p.x = wx;
-                p.y = wy;
+                p.x = cx;
+                p.y = cy;
 
                 Broadcast((char*)&p, p.h.size);
             }
