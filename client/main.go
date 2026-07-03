@@ -64,7 +64,9 @@ type Game struct {
 	bullets  map[int32]*BulletView
 	walls          []Wall
 	cellSize       float32
-	worldW, worldH float32 // 맵 필드의 월드 크기 (width*cellSize)
+	worldW, worldH float32         // 맵 필드의 월드 크기 (width*cellSize)
+	wallSet        map[[2]int]bool // 벽 셀 집합 (그림자캐스팅 시야 계산용)
+	cols, rows     int             // 맵 셀 개수
 
 	myID         int32
 	camX, camY   float32 // 카메라 좌상단(월드 좌표)
@@ -119,6 +121,18 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 	camX, camY := g.camX, g.camY
 	worldW, worldH := g.worldW, g.worldH
+	cellSize := g.cellSize
+
+	// 그림자캐스팅으로 내 시야에 들어오는 셀 집합 계산 (벽 뒤는 제외)
+	var visible map[[2]int]bool
+	if cellSize > 0 {
+		if me, ok := g.players[g.myID]; ok {
+			mcx := int(math.Floor(float64(me.x / cellSize)))
+			mcy := int(math.Floor(float64(me.y / cellSize)))
+			radCells := int(float32(visionRadius)/cellSize) + 1
+			visible = g.computeVisible(mcx, mcy, radCells)
+		}
+	}
 
 	// 맵 필드(밝은 배경). 스냅샷을 아직 못 받았으면 전체를 필드로 취급.
 	if worldW > 0 && worldH > 0 {
@@ -159,7 +173,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	disconnected, errText := g.disconnected, g.errText
 	g.mu.Unlock()
 
-	// 전장의 안개: 중앙 원형만 남기고 나머지를 검게. (플레이어가 항상 중앙이라 정적 이미지 사용)
+	// 벽에 가려진(시야 밖) 셀을 어둡게 덮는다. (셀 그림자캐스팅 결과)
+	if visible != nil {
+		drawCellFog(screen, visible, camX, camY, cellSize)
+	}
+
+	// 전장의 안개: 중앙 원형만 남기고 나머지를 검게. (경계를 부드럽게 + 원형 시야 한계)
 	screen.DrawImage(g.fog, nil)
 
 	status := fmt.Sprintf("WASD 이동 | 좌클릭 사격 | myID: %d | players: %d | bullets: %d", myID, nPlayers, nBullets)
@@ -295,6 +314,12 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 		g.cellSize = cellSize
 		g.worldW = width * cellSize
 		g.worldH = height * cellSize
+		g.cols = int(width)
+		g.rows = int(height)
+		g.wallSet = make(map[[2]int]bool, len(walls))
+		for _, w := range walls {
+			g.wallSet[[2]int{int(w.x / cellSize), int(w.y / cellSize)}] = true
+		}
 
 	case pktDestroy:
 		// Vec2Packet: id(4) x(4) y(4). 서버는 파괴 지점의 월드 좌표(x,y)를 보냄.
@@ -311,6 +336,7 @@ func (g *Game) removeWallAt(wx, wy float32) {
 	}
 	cx := int(wx / g.cellSize)
 	cy := int(wy / g.cellSize)
+	delete(g.wallSet, [2]int{cx, cy})
 	for i, w := range g.walls {
 		if int(w.x/g.cellSize) == cx && int(w.y/g.cellSize) == cy {
 			g.walls = append(g.walls[:i], g.walls[i+1:]...)
@@ -372,6 +398,132 @@ func (g *Game) setDisconnected(err error) {
 	g.disconnected = true
 	if err != nil {
 		g.errText = err.Error()
+	}
+}
+
+// ---- 시야(FOV): 재귀 그림자캐스팅 ----
+
+// 8개 옥탄트 변환 계수 (Björn Bergström 알고리즘)
+var fovMult = [4][8]int{
+	{1, 0, 0, -1, -1, 0, 0, 1},
+	{0, 1, -1, 0, 0, -1, 1, 0},
+	{0, 1, 1, 0, 0, -1, -1, 0},
+	{1, 0, 0, 1, -1, 0, 0, -1},
+}
+
+// 셀 (cx,cy) 가 벽인지. 맵 밖은 벽으로 취급해 시야를 막는다.
+func (g *Game) wallAt(cx, cy int) bool {
+	if g.cols > 0 && (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows) {
+		return true
+	}
+	return g.wallSet[[2]int{cx, cy}]
+}
+
+// (cx,cy) 를 중심으로 radius(셀 단위) 안에서 벽에 막히지 않고 보이는 셀 집합을 구한다.
+// g.mu 를 잡은 상태에서 호출해야 한다 (wallSet / cols / rows 를 읽음).
+func (g *Game) computeVisible(cx, cy, radius int) map[[2]int]bool {
+	visible := map[[2]int]bool{{cx, cy}: true}
+	for oct := 0; oct < 8; oct++ {
+		g.castLight(cx, cy, 1, 1.0, 0.0, radius,
+			fovMult[0][oct], fovMult[1][oct], fovMult[2][oct], fovMult[3][oct], visible)
+	}
+
+	// 대각선 벽 틈으로 시선이 새는 것 제거.
+	// 바닥 셀은 플레이어 쪽 직교 이웃 중 열려있고 보이는 셀이 하나라도 있어야 유효.
+	// (판정은 삭제 전 원본 집합 기준으로 해 순서 의존성을 없앤다)
+	var toRemove [][2]int
+	for cell := range visible {
+		x, y := cell[0], cell[1]
+		if (x == cx && y == cy) || g.wallAt(x, y) {
+			continue // 자기 셀과 벽면은 그대로 둔다
+		}
+		open := false
+		if x != cx { // x축으로 플레이어에 한 칸 가까운 이웃
+			nx := x + 1
+			if cx < x {
+				nx = x - 1
+			}
+			if visible[[2]int{nx, y}] && !g.wallAt(nx, y) {
+				open = true
+			}
+		}
+		if !open && y != cy { // y축으로 플레이어에 한 칸 가까운 이웃
+			ny := y + 1
+			if cy < y {
+				ny = y - 1
+			}
+			if visible[[2]int{x, ny}] && !g.wallAt(x, ny) {
+				open = true
+			}
+		}
+		if !open {
+			toRemove = append(toRemove, cell)
+		}
+	}
+	for _, c := range toRemove {
+		delete(visible, c)
+	}
+	return visible
+}
+
+func (g *Game) castLight(cx, cy, row int, start, end float64, radius, xx, xy, yx, yy int, visible map[[2]int]bool) {
+	if start < end {
+		return
+	}
+	var newStart float64
+	for j := row; j <= radius; j++ {
+		dx, dy := -j-1, -j
+		blocked := false
+		for dx <= 0 {
+			dx++
+			// dx,dy 를 실제 맵 좌표로 변환
+			X, Y := cx+dx*xx+dy*xy, cy+dx*yx+dy*yy
+			lSlope := (float64(dx) - 0.5) / (float64(dy) + 0.5)
+			rSlope := (float64(dx) + 0.5) / (float64(dy) - 0.5)
+			if start < rSlope {
+				continue
+			} else if end > lSlope {
+				break
+			}
+			if dx*dx+dy*dy < radius*radius {
+				visible[[2]int{X, Y}] = true
+			}
+			if blocked {
+				if g.wallAt(X, Y) {
+					newStart = rSlope
+					continue
+				}
+				blocked = false
+				start = newStart
+			} else if g.wallAt(X, Y) && j < radius {
+				// 벽을 만남: 이 뒤로는 자식 스캔에 위임
+				blocked = true
+				g.castLight(cx, cy, j+1, start, lSlope, radius, xx, xy, yx, yy, visible)
+				newStart = rSlope
+			}
+		}
+		if blocked {
+			break
+		}
+	}
+}
+
+// 시야 밖 셀을 어둡게 덮는다. 화면에 걸치는 셀만 순회.
+func drawCellFog(screen *ebiten.Image, visible map[[2]int]bool, camX, camY, cs float32) {
+	dark := color.RGBA{12, 13, 16, 255}
+	startCX := int(math.Floor(float64(camX / cs)))
+	startCY := int(math.Floor(float64(camY / cs)))
+	endCX := int(math.Floor(float64((camX + screenW) / cs)))
+	endCY := int(math.Floor(float64((camY + screenH) / cs)))
+	for cy := startCY; cy <= endCY; cy++ {
+		for cx := startCX; cx <= endCX; cx++ {
+			if visible[[2]int{cx, cy}] {
+				continue
+			}
+			sx := float32(cx)*cs - camX
+			sy := float32(cy)*cs - camY
+			vector.DrawFilledRect(screen, sx, sy, cs, cs, dark, false)
+		}
 	}
 }
 

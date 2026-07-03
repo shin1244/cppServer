@@ -43,18 +43,25 @@ void World::UpdatePlayers(float dt) {
 void World::UpdateBullets(float dt) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bullets[i].IsActive()) continue;
-        bullets[i].Update(dt);
 
-        float cx = bullets[i].GetX();
-        float cy = bullets[i].GetY();
-        if (map.IsWall(cx, cy)) {
+        float ox = bullets[i].GetX();
+        float oy = bullets[i].GetY();
+        bullets[i].Update(dt);
+        float nx = bullets[i].GetX();
+        float ny = bullets[i].GetY();
+
+        // 이전->현재 위치 경로 전체를 검사 (점 샘플링 관통/대각 코너 통과 방지)
+        int hitCx, hitCy;
+        if (map.SegmentHitsWall(ox, oy, nx, ny, hitCx, hitCy)) {
             RemoveBullet(i);
-            if (map.DamageWall(cx, cy)) {
+            float wx = (hitCx + 0.5f) * Map::CELL_SIZE;
+            float wy = (hitCy + 0.5f) * Map::CELL_SIZE;
+            if (map.DamageWall(wx, wy)) {
                 Vec2Packet p;
                 p.h.id = static_cast<unsigned short>(PacketId::Destroy);
                 p.h.size = sizeof(Vec2Packet);
-                p.x = cx;
-                p.y = cy;
+                p.x = wx;
+                p.y = wy;
 
                 Broadcast((char*)&p, p.h.size);
             }
@@ -108,8 +115,15 @@ void World::SendAOIUpdates() {
         std::vector<int> visiblePlayers;
         playerGrid.QueryNeighbors(slots[i].player.GetX(), slots[i].player.GetY(), visiblePlayers);
 
+        float myX = slots[i].player.GetX();
+        float myY = slots[i].player.GetY();
+
         for (int target : visiblePlayers) {
             if (slots[target].state != SlotState::Playing) continue;
+            if (target != i &&
+                !map.HasLineOfSight(myX, myY,
+                    slots[target].player.GetX(), slots[target].player.GetY()))
+                continue;   // 벽에 가려짐
             Vec2Packet p;
 			p.h.id = static_cast<unsigned short>(PacketId::MovePlayer);
             p.h.size = sizeof(Vec2Packet);
@@ -125,6 +139,9 @@ void World::SendAOIUpdates() {
 
         for (int target : visibleBullets) {
             if (!bullets[target].IsActive()) continue;
+            if (!map.HasLineOfSight(myX, myY,
+                    bullets[target].GetX(), bullets[target].GetY()))
+                continue;   // 벽에 가려짐
 
             Vec2Packet p;
 			p.h.id = static_cast<unsigned short>(PacketId::MoveBullet);

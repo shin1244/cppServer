@@ -29,9 +29,9 @@ public:
     void HandlePacket(RecvPacket& packet); 
 
 private:
-    static const int W = 20;
-    static const int Y = 20;
-    static const int WALL = 50;
+    static const int W = 50;
+    static const int Y = 50;
+    static const int WALL = 400;
     static const int SEED = 1234;
     static const int MAX_PLAYER = 4;
     static const int MAX_BULLETS = 1024;
