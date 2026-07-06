@@ -136,6 +136,7 @@
   <ItemGroup>
     <ClInclude Include="Bullet.h" />
     <ClInclude Include="DoubleBuffer.h" />
+    <ClInclude Include="main.h" />
     <ClInclude Include="Map.h" />
     <ClInclude Include="SpatialGrid.h" />
     <ClInclude Include="World.h" />

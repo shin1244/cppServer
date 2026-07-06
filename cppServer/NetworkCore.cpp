@@ -165,6 +165,5 @@ void flushSend(Session* session) {
 void postSend(Session* session, const char* data, int len)
 {
     session->sendBuffer.Write(data, len);
-    std::cout << "Send: " << len << "\n";
     flushSend(session);
 }
