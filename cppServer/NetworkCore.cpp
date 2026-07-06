@@ -3,7 +3,12 @@
 #include"ObjectPool.h"
 
 ObjectPool<Session, 1000> g_sessions;
+
+#ifdef USE_EVENT_QUEUE
+EventQueue<RecvPacket> g_recvQueue;
+#else
 DoubleBuffer<RecvPacket> g_recvQueue;
+#endif
 
 void workerThread() {
     while (true) {

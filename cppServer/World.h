@@ -8,8 +8,8 @@
 #include"Map.h"
 #include"SpatialGrid.h"
 
-constexpr int MAX_PLAYER = 100;
-constexpr int MAX_BULLETS = 1024;
+constexpr int MAX_PLAYER = 200;
+constexpr int MAX_BULLETS = 2048;
 
 enum class SlotState {
     Empty,
@@ -34,6 +34,10 @@ public:
     void Init();
     void Update(float dt);
     void HandlePacket(RecvPacket& packet); 
+
+    // -- 벤치마크를 위한 접근자 --
+    bool IsRunning() { return running; }
+    bool CanJoin() const;
 
 private:
     static const int W = 100;

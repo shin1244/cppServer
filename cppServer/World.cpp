@@ -112,7 +112,6 @@ void World::Collision() {
 
                 RemovePlayer(i);
                 RemoveBullet(b);
-                std::cout << "Kill!" << i << "\n";
             }
         }
     }

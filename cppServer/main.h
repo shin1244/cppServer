@@ -9,6 +9,7 @@
 #include <chrono>
 #include"RingBuffer.h"
 #include"DoubleBuffer.h"
+#include"EventQueue.h"
 #include"Protocol.h"
 #include"NetworkCore.h"
 #include"World.h"
@@ -16,6 +17,8 @@
 #define PSAPI_VERSION 1
 #include <psapi.h>
 #pragma comment(lib, "psapi.lib")
+
+#define USE_EVENT_QUEUE
 
 HANDLE g_iocp;   // IOCP วฺต้
 

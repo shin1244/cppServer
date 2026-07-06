@@ -23,6 +23,12 @@ void World::HandlePacket(RecvPacket& packet) {
     }
 }
 
+bool World::CanJoin() const {
+    for (int i = 0; i < MAX_PLAYER; ++i)
+        if (slots[i].state == SlotState::Empty) return true;
+    return false;
+}
+
 void World::HandleMove(RecvPacket& packet) {
     if (packet.body.size() < 1) return;
     unsigned char keys = static_cast<unsigned char>(packet.body[0]);
@@ -60,7 +66,6 @@ void World::HandleAttack(RecvPacket& packet) {
 }
 
 void World::HandleJoin(RecvPacket& packet) {
-    std::cout << "Join\n";
     int idx = FindEmptySlot();
     if (idx < 0) return;
 

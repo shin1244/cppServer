@@ -70,9 +70,9 @@ func runBot(addr string, fire bool) {
 
 	go readLoop(conn) // 수신은 별도 goroutine 이 전담
 
-	moveTick := time.NewTicker(500 * time.Millisecond) // 이동 방향 전환 주기
+	moveTick := time.NewTicker(50 * time.Millisecond) // 이동 방향 전환 주기
 	defer moveTick.Stop()
-	fireTick := time.NewTicker(300 * time.Millisecond) // 사격 주기 (서버 쿨다운 0.25s)
+	fireTick := time.NewTicker(10 * time.Millisecond) // 사격 주기 (서버 쿨다운 0.25s)
 	defer fireTick.Stop()
 
 	var lastKeys byte = 0xFF // 첫 전송을 강제하기 위한 불가능한 초기값
