@@ -8,7 +8,7 @@
 #include"Map.h"
 #include"SpatialGrid.h"
 
-constexpr int MAX_PLAYER = 4;
+constexpr int MAX_PLAYER = 100;
 constexpr int MAX_BULLETS = 1024;
 
 enum class SlotState {
@@ -36,9 +36,9 @@ public:
     void HandlePacket(RecvPacket& packet); 
 
 private:
-    static const int W = 50;
-    static const int Y = 50;
-    static const int WALL = 400;
+    static const int W = 100;
+    static const int Y = 100;
+    static const int WALL = 700;
     static const int SEED = 1234;
     static constexpr float PLAYER_RADIUS = 10.0f;
     static constexpr float BULLET_RADIUS = 4.0f;
