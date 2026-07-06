@@ -27,8 +27,6 @@ void workerThread() {
         Session* session = (Session*)completionKey;
 
         if (!ok) {
-
-
             std::cout << "[session " << session->socket << "] Disconnect\n";
             continue;
         }

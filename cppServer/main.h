@@ -27,11 +27,13 @@ struct TickBenchmark {
 	long long maxTime = 0;
 	long long minTime = LLONG_MAX;
 	int tickCount = 0;
+	long long totalConsumeTime;
 
 	void reset() {
 		totalTime = 0;
 		maxTime = 0;
 		minTime = LLONG_MAX;
 		tickCount = 0;
+		totalConsumeTime = 0;
 	}
 };

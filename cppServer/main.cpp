@@ -19,7 +19,8 @@ int main() {
     }
     std::cout << "IOCP created\n";
 
-    unsigned int n = std::thread::hardware_concurrency() - 1;
+    //unsigned int n = std::thread::hardware_concurrency() - 1;
+    unsigned int n = 32;
     std::cout << "spawning " << n << " worker threads\n";
 
     SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -82,6 +83,9 @@ int main() {
                     if (s.roomId >= 0) worlds[s.roomId].HandlePacket(p);
                 }
         #endif
+        auto ConsumeEnd = std::chrono::steady_clock::now();
+        auto ConsumeDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(ConsumeEnd - tickStart).count();
+        bench.totalConsumeTime += ConsumeDuration;
 
         for (auto& w : worlds) {
             w.Update(TICK_DT);
@@ -123,6 +127,7 @@ int main() {
             double avgMs = (bench.totalTime / (double)bench.tickCount) / 1'000'000.0;
             double maxMs = bench.maxTime / 1'000'000.0;
             double minMs = bench.minTime / 1'000'000.0;
+            double avgCMs = (bench.totalConsumeTime / (double)bench.tickCount) / 1'000'000.0;
 
             PROCESS_MEMORY_COUNTERS pmc;
             double currentMemMb = 0.0;
@@ -138,6 +143,7 @@ int main() {
                 << " - Avg Tick Time    : " << avgMs << " ms\n"
                 << " - Max Tick Time    : " << maxMs << " ms\n"
                 << " - Min Tick Time    : " << minMs << " ms\n"
+                << " - Avg Consume Time   : " << avgCMs << " ms\n"
                 << " - Memory Usage     : " << currentMemMb << " MB (Peak: " << peakMemMb << " MB)\n"
                 << "======================================================\n" << std::endl;
             measuring = false;
@@ -149,4 +155,3 @@ int main() {
     WSACleanup();
     return 0;
 }
-
