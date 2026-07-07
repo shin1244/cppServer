@@ -109,6 +109,9 @@ void Accepter(SOCKET s) {
 
 void postRecv(Session* session)
 {
+    int freeSize = session->recvBuffer.GetLinearFreeSize();
+    if (freeSize <= 0) return;
+
     ZeroMemory(&session->recvOverlapped, sizeof(session->recvOverlapped));
     session->recvWsaBuf.buf = session->recvBuffer.GetWriteBuffer();
     session->recvWsaBuf.len = session->recvBuffer.GetLinearFreeSize();

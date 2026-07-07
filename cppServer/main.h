@@ -18,7 +18,7 @@
 #include <psapi.h>
 #pragma comment(lib, "psapi.lib")
 
-#define USE_EVENT_QUEUE
+//#define USE_EVENT_QUEUE
 
 HANDLE g_iocp;   // IOCP วฺต้
 

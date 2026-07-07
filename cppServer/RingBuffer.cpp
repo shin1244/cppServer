@@ -1,13 +1,13 @@
 #include"RingBuffer.h"
 
  
-int RingBuffer::GetUsedSize() { return (tail - head + 4096) % 4096; }
+int RingBuffer::GetUsedSize() { return (tail - head + BUFFER_SIZE) % BUFFER_SIZE; }
 
-int RingBuffer::GetFreeSize() { return 4096 - GetUsedSize() - 1; }
+int RingBuffer::GetFreeSize() { return BUFFER_SIZE - GetUsedSize() - 1; }
 
 int RingBuffer::GetLinearFreeSize() {
     if (tail >= head) {
-        return 4096 - tail;
+        return BUFFER_SIZE - tail - 1;
     }
     else {
         return head - tail - 1;
@@ -21,7 +21,7 @@ int RingBuffer::GetLinearUsedSize() {
         return tail - head;
     }
     else {
-        return 4096 - head;
+        return BUFFER_SIZE - head;
     }
 }
 
@@ -29,9 +29,9 @@ char* RingBuffer::GetWriteBuffer() { return &buffer[tail]; }
 
 char* RingBuffer::GetReadBuffer() { return &buffer[head]; }
 
-void RingBuffer::OnRead(int bytes) { head = (head + bytes) % 4096; }
+void RingBuffer::OnRead(int bytes) { head = (head + bytes) % BUFFER_SIZE; }
 
-void RingBuffer::OnWrite(int bytes) { tail = (tail + bytes) % 4096; }
+void RingBuffer::OnWrite(int bytes) { tail = (tail + bytes) % BUFFER_SIZE; }
 
 void RingBuffer::Peek(char* dest, int len) {
     if (GetUsedSize() < len) return;
@@ -39,7 +39,7 @@ void RingBuffer::Peek(char* dest, int len) {
         memcpy(dest, &buffer[head], len);
     }
     else {
-        int rightSize = 4096 - head;
+        int rightSize = BUFFER_SIZE - head;
         if (len <= rightSize) {
             memcpy(dest, &buffer[head], len);
         }
@@ -53,7 +53,7 @@ void RingBuffer::Peek(char* dest, int len) {
 bool RingBuffer::Write(const char* data, int len) {
     if (len > GetFreeSize()) return false;
 
-    int rightSize = 4096 - tail;
+    int rightSize = BUFFER_SIZE - tail;
     if (len <= rightSize) {
         memcpy(&buffer[tail], data, len);
     }

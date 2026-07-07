@@ -3,7 +3,8 @@
 
 class RingBuffer {
 private:
-    char buffer[4096];
+    static const int BUFFER_SIZE = 512;
+    char buffer[BUFFER_SIZE];
     int head = 0;
     int tail = 0;
 public:

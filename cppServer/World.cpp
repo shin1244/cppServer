@@ -1,6 +1,8 @@
 #include"World.h"
 #include <algorithm>
 
+constexpr float AOI_RADIUS = 280.0f;
+
 void World::Init() {
     running = false;
     map.Generate(W, Y, WALL, MAX_PLAYER, SEED);
@@ -136,20 +138,28 @@ void World::CheckMatchEnd() {
 void World::SendAOIUpdates() {
     for (int i = 0; i < MAX_PLAYER; ++i) {
         if (slots[i].state != SlotState::Playing) continue;
-        std::vector<int> visiblePlayers;
-        playerGrid.QueryNeighbors(slots[i].player.GetX(), slots[i].player.GetY(), visiblePlayers);
 
         float myX = slots[i].player.GetX();
         float myY = slots[i].player.GetY();
 
-        for (int target : visiblePlayers) {
+        std::vector<int> candPlayers;
+#ifdef USE_NOT_GRID
+        for (int t = 0; t < MAX_PLAYER; ++t) candPlayers.push_back(t);
+#else
+        playerGrid.QueryNeighbors(myX, myY, candPlayers);
+#endif
+        for (int target : candPlayers) {
             if (slots[target].state != SlotState::Playing) continue;
-            if (target != i &&
-                !map.HasLineOfSight(myX, myY,
-                    slots[target].player.GetX(), slots[target].player.GetY()))
-                continue;   // 벽에 가려짐
+            if (target != i) {
+                float dx = slots[target].player.GetX() - myX;
+                float dy = slots[target].player.GetY() - myY;
+                if (dx * dx + dy * dy > AOI_RADIUS * AOI_RADIUS) continue;
+                if (!map.HasLineOfSight(myX, myY,
+                        slots[target].player.GetX(), slots[target].player.GetY()))
+                    continue;   // 벽에 가려짐
+            }
             Vec2Packet p;
-			p.h.id = static_cast<unsigned short>(PacketId::MovePlayer);
+            p.h.id = static_cast<unsigned short>(PacketId::MovePlayer);
             p.h.size = sizeof(Vec2Packet);
             p.id = target;
             p.x = slots[target].player.GetX();
@@ -159,19 +169,25 @@ void World::SendAOIUpdates() {
             for (int ob : slots[i].observers) SendTo(ob, (char*)&p, p.h.size);
         }
 
-        std::vector<int> visibleBullets;
-        bulletGrid.QueryNeighbors(slots[i].player.GetX(), slots[i].player.GetY(), visibleBullets);
-
-        for (int target : visibleBullets) {
+        std::vector<int> candBullets;
+#ifdef USE_NOT_GRID
+        for (int t = 0; t < MAX_BULLETS; ++t) candBullets.push_back(t);
+#else
+        bulletGrid.QueryNeighbors(myX, myY, candBullets);
+#endif
+        for (int target : candBullets) {
             if (!bullets[target].IsActive()) continue;
+            float dx = bullets[target].GetX() - myX;
+            float dy = bullets[target].GetY() - myY;
+            if (dx * dx + dy * dy > AOI_RADIUS * AOI_RADIUS) continue;
             if (!map.HasLineOfSight(myX, myY,
                     bullets[target].GetX(), bullets[target].GetY()))
                 continue;   // 벽에 가려짐
 
             Vec2Packet p;
-			p.h.id = static_cast<unsigned short>(PacketId::MoveBullet);
-            p.id = target;
+            p.h.id = static_cast<unsigned short>(PacketId::MoveBullet);
             p.h.size = sizeof(Vec2Packet);
+            p.id = target;
             p.x = bullets[target].GetX();
             p.y = bullets[target].GetY();
 

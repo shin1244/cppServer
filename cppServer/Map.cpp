@@ -131,7 +131,6 @@ bool Map::IsWallCell(int cx, int cy) const {
     return cells[CellIndex(cx, cy)] != 0;
 }
 
-// AI
 bool Map::HasLineOfSight(float x0, float y0, float x1, float y1) const
 {
     int cx = WorldToCellX(x0);

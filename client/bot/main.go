@@ -42,12 +42,20 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:5050", "서버 주소")
 	n := flag.Int("n", 4, "봇 개수")
 	fire := flag.Bool("fire", false, "이동뿐 아니라 사격도 할지")
+	malRatio := flag.Float64("mal", 0, "악성 봇 비율 [0,1]. 완성되지 않는 거대 패킷을 흘려보내 수신 버퍼를 압박한다")
 	flag.Parse()
 
+	malN := 0
 	for i := 0; i < *n; i++ {
-		go runBot(*addr, *fire)
+		if rand.Float64() < *malRatio {
+			malN++
+			go runMaliciousBot(*addr)
+		} else {
+			go runBot(*addr, *fire)
+		}
 		time.Sleep(5 * time.Millisecond) // 접속을 살짝 분산 (동시 폭주 완화)
 	}
+	log.Printf("봇 %d개 기동 (악성 %d개)", *n, malN)
 
 	// 1초마다 연결 상태 출력. 종료는 Ctrl+C.
 	for range time.Tick(time.Second) {
@@ -70,7 +78,7 @@ func runBot(addr string, fire bool) {
 
 	go readLoop(conn) // 수신은 별도 goroutine 이 전담
 
-	moveTick := time.NewTicker(50 * time.Millisecond) // 이동 방향 전환 주기
+	moveTick := time.NewTicker(10 * time.Millisecond) // 이동 방향 전환 주기
 	defer moveTick.Stop()
 	fireTick := time.NewTicker(10 * time.Millisecond) // 사격 주기 (서버 쿨다운 0.25s)
 	defer fireTick.Stop()
@@ -91,6 +99,53 @@ func runBot(addr string, fire bool) {
 				sendFire(conn)
 			}
 		}
+	}
+}
+
+// runMaliciousBot 은 "의미를 알 수 없는 악성 패킷"을 보내는 봇이다.
+// 헤더에 최대 크기(65535)를 적어 거대한 프레임을 예고한 뒤, 본문을 조금씩
+// 흘려보내되 절대 프레임을 완성하지 않는다. 서버 파싱 루프는
+// GetUsedSize() < header.size 조건에서 계속 대기하므로, 이 바이트들은
+// 소비되지 못하고 수신 버퍼에 그대로 쌓인다.
+//
+//   - 링버퍼(고정 4096): 4096을 넘을 수 없어 곧 가득 참 → 스스로 세션을 끊어
+//     메모리를 지켜낸다.
+//   - 가변버퍼: 프레임을 담으려 계속 grow → 세션마다 최대 ~64KB가 눌러앉는다.
+func runMaliciousBot(addr string) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		log.Println("dial(mal):", err)
+		return
+	}
+	defer conn.Close()
+
+	atomic.AddInt64(&connected, 1)
+	defer atomic.AddInt64(&connected, -1)
+
+	go readLoop(conn) // 서버 송신 버퍼가 변수가 되지 않도록 수신은 계속 비워준다
+
+	// 최대 크기를 주장하는 헤더. id 는 존재하지 않는 값이라 의미가 없다.
+	header := make([]byte, 4)
+	binary.LittleEndian.PutUint16(header[0:2], 65535)  // size = 프레임 전체 길이(최대)
+	binary.LittleEndian.PutUint16(header[2:4], 0xFFFF) // id = 의미 없는 값
+	if _, err := conn.Write(header); err != nil {
+		return
+	}
+
+	// 본문을 야금야금 흘려보낸다. total(지금까지 보낸 바이트)이 65535에
+	// 닿으면 프레임이 완성되어 서버가 소비해버리므로, 그 직전까지만 채우고 멈춘다.
+	chunk := make([]byte, 256)
+	total := len(header)
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+	for range tick.C {
+		if total+len(chunk) >= 65535 {
+			continue // 프레임을 완성시키지 않고 버퍼에 눌러앉힌다
+		}
+		if _, err := conn.Write(chunk); err != nil {
+			return // 서버가 (링버퍼라면) 끊었다는 신호
+		}
+		total += len(chunk)
 	}
 }
 

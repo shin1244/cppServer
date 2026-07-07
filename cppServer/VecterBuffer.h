@@ -8,6 +8,9 @@ private:
 	int tail = 0;
 
 public:
+    VectorBuffer() {
+        buffer.resize(512);
+    }
     // 현재 버퍼에 쌓인 데이터의 크기를 반환합니다.
     int GetUsedSize();
     // 현재 버퍼에 빈 공간을 반환합니다.
