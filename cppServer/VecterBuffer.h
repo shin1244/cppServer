@@ -10,6 +10,8 @@ private:
 public:
     // 현재 버퍼에 쌓인 데이터의 크기를 반환합니다.
     int GetUsedSize();
+    // 현재 버퍼에 빈 공간을 반환합니다.
+    int GetFreeSize();
     // 현재 버퍼에 연속된 빈 공간을 반환합니다.
     int GetLinearFreeSize();
     // 현재 버퍼에 연속된 데이터의 크기를 반환합니다.
@@ -28,4 +30,7 @@ public:
     bool Write(const char* data, int len);
     // 버퍼를 초기화 합니다.
     void Clear();
+
+private:
+    void Reserve(int len);
 };

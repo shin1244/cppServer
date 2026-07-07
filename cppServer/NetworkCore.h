@@ -4,6 +4,7 @@
 #include <stack>
 #include <iostream>
 #include "RingBuffer.h"
+#include "VecterBuffer.h"
 #include "DoubleBuffer.h"
 #include "EventQueue.h"
 #include "Protocol.h"
@@ -11,14 +12,22 @@
 #pragma comment(lib, "ws2_32.lib")
 
 #define USE_EVENT_QUEUE
+#define USE_VECTER_BUFFER
 
 struct Session {
     SOCKET socket;
     int index;
     int roomId = -1;
 
+#ifdef USE_VECTER_BUFFER
+    VectorBuffer recvBuffer;
+    VectorBuffer sendBuffer;
+#else
     RingBuffer recvBuffer;
     RingBuffer sendBuffer;
+#endif
+
+
 
     bool sendPending;
     std::mutex sendLock;
