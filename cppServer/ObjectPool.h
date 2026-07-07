@@ -22,3 +22,9 @@ public:
 	T* begin() { return items; }
     T* end() { return items + N; }
 };
+
+
+
+
+
+

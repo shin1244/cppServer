@@ -8,10 +8,10 @@
 #include"Map.h"
 #include"SpatialGrid.h"
 
-constexpr int MAX_PLAYER = 200;
-constexpr int MAX_BULLETS = 4096;
+constexpr int MAX_PLAYER = 100;
+constexpr int MAX_BULLETS = 1024;
 
-//#define USE_NOT_GRID
+#define USE_NOT_GRID
 
 enum class SlotState {
     Empty,
