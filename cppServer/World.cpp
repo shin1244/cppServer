@@ -10,8 +10,8 @@ void World::Init() {
 
     float ww = map.GetWorldWidth();
     float wh = map.GetWorldHeight();
-    playerGrid.Init(ww, wh, 280);
-    bulletGrid.Init(ww, wh, 280);
+    playerGrid.Init(ww, wh, 300);
+    bulletGrid.Init(ww, wh, 300);
 
     for (int i = 0; i < MAX_PLAYERS; i++) {
         slots[i].player.SetPos(spawns[i].x, spawns[i].y);
@@ -59,12 +59,12 @@ void World::UpdateBullets(float dt) {
             RemoveBullet(i);
             if (map.DamageWall(cx, cy)) {
                 int itemDropId = RollWallDropItemId();
-                //if (itemDropId > 0) {
-                //    for (int i = 0; i < MAX_ITEMS; i++) {
-                //        if (items[i].IsActive()) continue;
-                //        items[i].Spawn(cx, cy, itemDropId);
-                //    }
-                //}
+                if (itemDropId > 0) {
+                    for (int i = 0; i < MAX_ITEMS; i++) {
+                        if (items[i].IsActive()) continue;
+                        items[i].Spawn(cx, cy, itemDropId);
+                    }
+                }
                 auto p = MakeVec2Packet(PacketId::Destroy, itemDropId, cx, cy);
                 Broadcast((char*)&p, p.h.size);
             }
@@ -141,12 +141,15 @@ void World::SendAOIUpdates() {
         float myX = slots[i].player.GetX();
         float myY = slots[i].player.GetY();
 
+        // --- 플레이어 ---
         std::vector<int> candPlayers;
 #ifdef USE_NOT_GRID
         for (int t = 0; t < MAX_PLAYERS; ++t) candPlayers.push_back(t);
 #else
         playerGrid.QueryNeighbors(myX, myY, candPlayers);
 #endif
+        bool currentVisiblePlayers[MAX_PLAYERS] = {};
+
         for (int target : candPlayers) {
             if (slots[target].state != SlotState::Playing) continue;
             if (target != i) {
@@ -154,38 +157,58 @@ void World::SendAOIUpdates() {
                 float dy = slots[target].player.GetY() - myY;
                 if (dx * dx + dy * dy > AOI_RADIUS * AOI_RADIUS) continue;
                 if (!map.HasLineOfSight(myX, myY,
-                        slots[target].player.GetX(), slots[target].player.GetY()))
-                    continue;   // 벽에 가려짐
+                    slots[target].player.GetX(), slots[target].player.GetY()))
+                    continue;
             }
-            auto p = MakeVec2Packet(PacketId::MovePlayer, 0, slots[target].player.GetX(), slots[target].player.GetY());
-
+            currentVisiblePlayers[target] = true; 
+            auto p = MakeVec2Packet(PacketId::MovePlayer, target,
+                slots[target].player.GetX(), slots[target].player.GetY());
             SendTo(i, (char*)&p, p.h.size);
             for (int ob : slots[i].observers) SendTo(ob, (char*)&p, p.h.size);
         }
 
+        for (int t = 0; t < MAX_PLAYERS; ++t) {
+            if (slots[i].visiblePlayers[t] && !currentVisiblePlayers[t]) {
+                auto p = MakeIdPacket(PacketId::HidePlayer, t);
+                SendTo(i, (char*)&p, p.h.size);
+                for (int ob : slots[i].observers) SendTo(ob, (char*)&p, p.h.size);
+            }
+            slots[i].visiblePlayers[t] = currentVisiblePlayers[t];
+        }
+        // --- 총알 ---
         std::vector<int> candBullets;
 #ifdef USE_NOT_GRID
         for (int t = 0; t < MAX_BULLETS; ++t) candBullets.push_back(t);
 #else
         bulletGrid.QueryNeighbors(myX, myY, candBullets);
 #endif
+        bool currentVisibleBullet[MAX_BULLETS] = {};
+
         for (int target : candBullets) {
             if (!bullets[target].IsActive()) continue;
             float dx = bullets[target].GetX() - myX;
             float dy = bullets[target].GetY() - myY;
             if (dx * dx + dy * dy > AOI_RADIUS * AOI_RADIUS) continue;
             if (!map.HasLineOfSight(myX, myY,
-                    bullets[target].GetX(), bullets[target].GetY()))
-                continue;   // 벽에 가려짐
-
-            auto p = MakeVec2Packet(PacketId::MoveBullet, 0, bullets[target].GetX(), bullets[target].GetY());
-
+                bullets[target].GetX(), bullets[target].GetY()))
+                continue;
+            currentVisibleBullet[target] = true;                  // ①
+            auto p = MakeVec2Packet(PacketId::MoveBullet, target,
+                bullets[target].GetX(), bullets[target].GetY());
             SendTo(i, (char*)&p, p.h.size);
             for (int ob : slots[i].observers) SendTo(ob, (char*)&p, p.h.size);
         }
+
+        for (int t = 0; t < MAX_BULLETS; ++t) {                   // ②
+            if (slots[i].visibleBullet[t] && !currentVisibleBullet[t]) {
+                auto p = MakeIdPacket(PacketId::HideBullet, t);
+                SendTo(i, (char*)&p, p.h.size);
+                for (int ob : slots[i].observers) SendTo(ob, (char*)&p, p.h.size);
+            }
+            slots[i].visibleBullet[t] = currentVisibleBullet[t];
+        }
     }
 }
-
 int World::FindEmptySlot() {
     for (int i = 0; i < MAX_PLAYERS; ++i) {
         if (slots[i].state == SlotState::Empty) return i;

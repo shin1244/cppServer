@@ -27,6 +27,9 @@ struct PlayerSlot
     int sessionIndex = -1;
     SlotState state = SlotState::Empty;
 
+    bool visiblePlayers[MAX_PLAYERS] = {};
+    bool visibleBullet[MAX_BULLETS] = {};
+
     std::vector<int> observers;
     int target = -1;
 

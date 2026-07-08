@@ -93,7 +93,7 @@ int main() {
             w.Update(TICK_DT);
         }
 
-        if (!measuring && worlds[0].IsRunning() && worlds[1].IsRunning()) {
+        if (!measuring && worlds[0].IsRunning()) {
             measuring = true;
             bench.reset();
             benchStart = std::chrono::steady_clock::now(); // ★ 120초 타이머 시작 시점 잡기
