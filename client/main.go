@@ -59,6 +59,11 @@ type PlayerView struct{ x, y float32 }
 type BulletView struct{ x, y float32 }
 type Wall struct{ x, y, size float32 } // 월드 좌표 기준 좌상단 + 한 변 길이
 
+type ItemView struct {
+	itemType int32
+	x, y     float32
+}
+
 type Game struct {
 	conn net.Conn
 
@@ -66,6 +71,7 @@ type Game struct {
 	players        map[int32]*PlayerView
 	bullets        map[int32]*BulletView
 	walls          []Wall
+	items          []ItemView
 	cellSize       float32
 	worldW, worldH float32         // 맵 필드의 월드 크기 (width*cellSize)
 	wallSet        map[[2]int]bool // 벽 셀 집합 (그림자캐스팅 시야 계산용)
@@ -171,6 +177,19 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			continue
 		}
 		vector.DrawFilledRect(screen, sx, sy, w.size, w.size, wallColor, false)
+	}
+
+	for _, item := range g.items {
+		sx, sy := item.x-camX, item.y-camY
+		size := float32(18)
+		if cellSize > 0 {
+			size = cellSize * 0.35
+		}
+		if sx+size/2 < 0 || sy+size/2 < 0 || sx-size/2 > screenW || sy-size/2 > screenH {
+			continue
+		}
+		vector.DrawFilledRect(screen, sx-size/2, sy-size/2, size, size, itemColor(item.itemType), false)
+		vector.StrokeRect(screen, sx-size/2, sy-size/2, size, size, 2, color.RGBA{20, 24, 31, 255}, false)
 	}
 
 	for id, p := range g.players {
@@ -351,6 +370,7 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 			walls = append(walls, Wall{x: cx * cellSize, y: cy * cellSize, size: cellSize})
 		}
 		g.walls = walls
+		g.items = nil
 		g.cellSize = cellSize
 		g.worldW = width * cellSize
 		g.worldH = height * cellSize
@@ -363,8 +383,11 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 
 	case pktDestroy:
 		// Vec2Packet: id(4) x(4) y(4). 서버는 파괴 지점의 월드 좌표(x,y)를 보냄.
-		if _, x, y, ok := readVec2(body); ok {
+		if dropID, x, y, ok := readVec2(body); ok {
 			g.removeWallAt(x, y)
+			if dropID > 0 {
+				g.addItemDrop(dropID, x, y)
+			}
 		}
 
 	case pktObserve:
@@ -399,6 +422,19 @@ func (g *Game) removeWallAt(wx, wy float32) {
 }
 
 // IdPacket body: int32 id (4바이트)
+func (g *Game) addItemDrop(itemType int32, wx, wy float32) {
+	if g.cellSize <= 0 {
+		g.items = append(g.items, ItemView{itemType: itemType, x: wx, y: wy})
+		return
+	}
+
+	cx := int(wx / g.cellSize)
+	cy := int(wy / g.cellSize)
+	x := float32(cx)*g.cellSize + g.cellSize/2
+	y := float32(cy)*g.cellSize + g.cellSize/2
+	g.items = append(g.items, ItemView{itemType: itemType, x: x, y: y})
+}
+
 func readID(body []byte) (int32, bool) {
 	if len(body) < 4 {
 		return 0, false
@@ -638,6 +674,19 @@ func colorFor(id int32) color.Color {
 }
 
 // 화면 중앙에 원형 구멍이 뚫린 검은 오버레이. 가장자리는 부드럽게 페이드.
+func itemColor(itemType int32) color.Color {
+	switch itemType {
+	case 1:
+		return color.RGBA{230, 70, 70, 255}
+	case 2:
+		return color.RGBA{70, 130, 235, 255}
+	case 3:
+		return color.RGBA{245, 205, 65, 255}
+	default:
+		return color.RGBA{230, 230, 230, 255}
+	}
+}
+
 func makeFog() *ebiten.Image {
 	img := ebiten.NewImage(screenW, screenH)
 	pix := make([]byte, screenW*screenH*4)
@@ -677,7 +726,7 @@ func main() {
 	defer conn.Close()
 
 	game := &Game{
-		conn:    conn,
+		conn:       conn,
 		players:    make(map[int32]*PlayerView),
 		bullets:    make(map[int32]*BulletView),
 		myID:       -1,

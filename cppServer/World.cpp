@@ -5,7 +5,7 @@ constexpr float AOI_RADIUS = 280.0f;
 
 void World::Init() {
     running = false;
-    map.Generate(W, Y, WALL, MAX_PLAYER, SEED);
+    map.Generate(W, Y, WALL, MAX_PLAYERS, SEED);
     const auto& spawns = map.GetSpawnPoints();
 
     float ww = map.GetWorldWidth();
@@ -13,7 +13,7 @@ void World::Init() {
     playerGrid.Init(ww, wh, 280);
     bulletGrid.Init(ww, wh, 280);
 
-    for (int i = 0; i < MAX_PLAYER; i++) {
+    for (int i = 0; i < MAX_PLAYERS; i++) {
         slots[i].player.SetPos(spawns[i].x, spawns[i].y);
     }
 }
@@ -29,7 +29,7 @@ void World::Update(float dt) {
 }
 
 void World::UpdatePlayers(float dt) {
-    for (int i = 0; i < MAX_PLAYER; i++) {
+    for (int i = 0; i < MAX_PLAYERS; i++) {
         if (slots[i].state != SlotState::Playing) continue;
         float ox = slots[i].player.GetX();
         float oy = slots[i].player.GetY();
@@ -58,12 +58,14 @@ void World::UpdateBullets(float dt) {
         if (map.IsWall(cx, cy)) {
             RemoveBullet(i);
             if (map.DamageWall(cx, cy)) {
-                Vec2Packet p;
-                p.h.id = static_cast<unsigned short>(PacketId::Destroy);
-                p.h.size = sizeof(Vec2Packet);
-                p.x = cx;
-                p.y = cy;
-
+                int itemDropId = RollWallDropItemId();
+                //if (itemDropId > 0) {
+                //    for (int i = 0; i < MAX_ITEMS; i++) {
+                //        if (items[i].IsActive()) continue;
+                //        items[i].Spawn(cx, cy, itemDropId);
+                //    }
+                //}
+                auto p = MakeVec2Packet(PacketId::Destroy, itemDropId, cx, cy);
                 Broadcast((char*)&p, p.h.size);
             }
         }
@@ -72,7 +74,7 @@ void World::UpdateBullets(float dt) {
 
 void World::UpdateGrid() {
     playerGrid.Clear();
-    for (int i = 0; i < MAX_PLAYER; i++) {
+    for (int i = 0; i < MAX_PLAYERS; i++) {
         if (slots[i].state != SlotState::Playing) continue;
         playerGrid.Add(i, slots[i].player.GetX(), slots[i].player.GetY());
     }
@@ -84,7 +86,7 @@ void World::UpdateGrid() {
 }
 
 void World::Collision() {
-    for (int i = 0; i < MAX_PLAYER; ++i) {
+    for (int i = 0; i < MAX_PLAYERS; ++i) {
         if (slots[i].state != SlotState::Playing) continue;
         float px = slots[i].player.GetX();
         float py = slots[i].player.GetY();
@@ -121,7 +123,7 @@ void World::Collision() {
 
 void World::CheckMatchEnd() {
     int alive = 0, winner = -1;
-    for (int i = 0; i < MAX_PLAYER; ++i)
+    for (int i = 0; i < MAX_PLAYERS; ++i)
         if (slots[i].state == SlotState::Playing) { alive++; winner = i; }
 
     if (alive <= 1) {
@@ -133,7 +135,7 @@ void World::CheckMatchEnd() {
 }
 
 void World::SendAOIUpdates() {
-    for (int i = 0; i < MAX_PLAYER; ++i) {
+    for (int i = 0; i < MAX_PLAYERS; ++i) {
         if (slots[i].state != SlotState::Playing) continue;
 
         float myX = slots[i].player.GetX();
@@ -141,7 +143,7 @@ void World::SendAOIUpdates() {
 
         std::vector<int> candPlayers;
 #ifdef USE_NOT_GRID
-        for (int t = 0; t < MAX_PLAYER; ++t) candPlayers.push_back(t);
+        for (int t = 0; t < MAX_PLAYERS; ++t) candPlayers.push_back(t);
 #else
         playerGrid.QueryNeighbors(myX, myY, candPlayers);
 #endif
@@ -185,15 +187,15 @@ void World::SendAOIUpdates() {
 }
 
 int World::FindEmptySlot() {
-    for (int i = 0; i < MAX_PLAYER; ++i) {
+    for (int i = 0; i < MAX_PLAYERS; ++i) {
         if (slots[i].state == SlotState::Empty) return i;
     }
     return -1;
 }
 
 int World::FindNextPlayingSlot(int idx) {
-    for (int i = 1; i < MAX_PLAYER; ++i) {
-        int next_idx = (idx + i) % MAX_PLAYER;
+    for (int i = 1; i < MAX_PLAYERS; ++i) {
+        int next_idx = (idx + i) % MAX_PLAYERS;
         if (slots[next_idx].state == SlotState::Playing) {
             return next_idx;
         }
@@ -202,7 +204,7 @@ int World::FindNextPlayingSlot(int idx) {
 }
 
 int World::FindSlotBySession(int sessionIndex) {
-    for (int i = 0; i < MAX_PLAYER; ++i) {
+    for (int i = 0; i < MAX_PLAYERS; ++i) {
         if (slots[i].sessionIndex == sessionIndex) return i;
     }
     return -1;
@@ -235,4 +237,10 @@ void World::ObservePlayer(int observerIdx, int targetIdx) {
     auto p = MakeIdPacket(PacketId::Observe, targetIdx);
 
     SendTo(observerIdx, (char*)&p, p.h.size);
+}
+
+int World::RollWallDropItemId() {
+    static std::mt19937 rng(SEED);
+    static std::uniform_int_distribution<int> dist(0, 3);
+    return dist(rng);
 }

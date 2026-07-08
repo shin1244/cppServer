@@ -1,6 +1,7 @@
 #pragma once
 #include"Player.h"
 #include"Bullet.h"
+#include"Item.h"
 #include<iostream>
 #include"Protocol.h"
 #include"NetworkCore.h"
@@ -8,10 +9,11 @@
 #include"Map.h"
 #include"SpatialGrid.h"
 
-constexpr int MAX_PLAYER = 100;
-constexpr int MAX_BULLETS = 1024;
+constexpr int MAX_PLAYERS = 100;
+constexpr int MAX_BULLETS = 512;
+constexpr int MAX_ITEMS = 512;
 
-#define USE_NOT_GRID
+//#define USE_NOT_GRID
 
 enum class SlotState {
     Empty,
@@ -51,8 +53,9 @@ private:
 
     bool running;
     Map map;
-    PlayerSlot slots[MAX_PLAYER];
+    PlayerSlot slots[MAX_PLAYERS];
     Bullet bullets[MAX_BULLETS];
+    Item items[MAX_ITEMS];
     SpatialGrid playerGrid;
     SpatialGrid bulletGrid;
 
@@ -81,4 +84,5 @@ private:
     int FindSlotBySession(int sessionIndex);
     void TryStartMatch();
     void ObservePlayer(int observerIdx, int targetIdx);
+    int RollWallDropItemId();
 };

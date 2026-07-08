@@ -52,7 +52,7 @@ int main() {
     constexpr int   TICK_MS = 33;    
     constexpr float TICK_DT = TICK_MS / 1000.0f;
 
-    std::vector<World> worlds(2);
+    std::vector<World> worlds(1);
     for (auto& w : worlds) w.Init();
 
     // -- 메인 루프 시작 --
@@ -62,6 +62,8 @@ int main() {
     auto lastReportTime = std::chrono::steady_clock::now(); // 마지막 결과 출력 시간
     bool measuring = false;
     auto benchStart = std::chrono::steady_clock::now();
+
+    std::cout << "gg \n";
 
     while (true) {
         auto tickStart = std::chrono::steady_clock::now();

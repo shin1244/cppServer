@@ -24,7 +24,7 @@ void World::HandlePacket(RecvPacket& packet) {
 }
 
 bool World::CanJoin() const {
-    for (int i = 0; i < MAX_PLAYER; ++i)
+    for (int i = 0; i < MAX_PLAYERS; ++i)
         if (slots[i].state == SlotState::Empty) return true;
     return false;
 }
@@ -110,11 +110,11 @@ void World::HandleObserve(RecvPacket& packet) {
 
 void World::TryStartMatch() {
     if (running) return;
-    for (int i = 0; i < MAX_PLAYER; i++) {
+    for (int i = 0; i < MAX_PLAYERS; i++) {
         std::cout << i << "\n";
         if (slots[i].state == SlotState::Empty) return;
     }
-    for (int i = 0; i < MAX_PLAYER; i++) {
+    for (int i = 0; i < MAX_PLAYERS; i++) {
         slots[i].state = SlotState::Playing;
     }
 
@@ -149,7 +149,7 @@ void World::BroadcastMapSnapshot() {
 
 
 void World::Broadcast(const char* packet, int len) {
-    for (int i = 0; i < MAX_PLAYER; ++i) {
+    for (int i = 0; i < MAX_PLAYERS; ++i) {
         if (slots[i].state == SlotState::Empty) continue;
         int idx = slots[i].sessionIndex;
         Session* s = &g_sessions[idx];
