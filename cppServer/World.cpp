@@ -126,10 +126,7 @@ void World::CheckMatchEnd() {
 
     if (alive <= 1) {
         running = false;
-        IdPacket p;
-        p.h.id = static_cast<unsigned short>(PacketId::End);
-        p.h.size = sizeof(IdPacket);
-        p.id = winner;
+        auto p = MakeIdPacket(PacketId::End, winner);
 
         Broadcast((char*)&p, p.h.size);
     }
@@ -158,12 +155,7 @@ void World::SendAOIUpdates() {
                         slots[target].player.GetX(), slots[target].player.GetY()))
                     continue;   // 벽에 가려짐
             }
-            Vec2Packet p;
-            p.h.id = static_cast<unsigned short>(PacketId::MovePlayer);
-            p.h.size = sizeof(Vec2Packet);
-            p.id = target;
-            p.x = slots[target].player.GetX();
-            p.y = slots[target].player.GetY();
+            auto p = MakeVec2Packet(PacketId::MovePlayer, 0, slots[target].player.GetX(), slots[target].player.GetY());
 
             SendTo(i, (char*)&p, p.h.size);
             for (int ob : slots[i].observers) SendTo(ob, (char*)&p, p.h.size);
@@ -184,12 +176,7 @@ void World::SendAOIUpdates() {
                     bullets[target].GetX(), bullets[target].GetY()))
                 continue;   // 벽에 가려짐
 
-            Vec2Packet p;
-            p.h.id = static_cast<unsigned short>(PacketId::MoveBullet);
-            p.h.size = sizeof(Vec2Packet);
-            p.id = target;
-            p.x = bullets[target].GetX();
-            p.y = bullets[target].GetY();
+            auto p = MakeVec2Packet(PacketId::MoveBullet, 0, bullets[target].GetX(), bullets[target].GetY());
 
             SendTo(i, (char*)&p, p.h.size);
             for (int ob : slots[i].observers) SendTo(ob, (char*)&p, p.h.size);
@@ -222,22 +209,14 @@ int World::FindSlotBySession(int sessionIndex) {
 }
 
 void World::RemovePlayer(int i) {
-    IdPacket p;
-    p.h.size = sizeof(IdPacket);
-    p.h.id = static_cast<unsigned short>(PacketId::RemovePlayer);
-    p.id = i;
-
+    auto p = MakeIdPacket(PacketId::RemovePlayer, i);
     Broadcast((char*)&p, p.h.size);
 }
 
 void World::RemoveBullet(int i) {
     bullets[i].Clear();
 
-    IdPacket p;
-    p.h.size = sizeof(p);
-    p.h.id = (unsigned short)PacketId::RemoveBullet;
-    p.id = i;
-
+    auto p = MakeIdPacket(PacketId::RemoveBullet, i);
     Broadcast((char*)&p, p.h.size);
 }
 
@@ -253,10 +232,7 @@ void World::ObservePlayer(int observerIdx, int targetIdx) {
     slots[targetIdx].observers.push_back(observerIdx);
     slots[observerIdx].target = targetIdx;
 
-    IdPacket sp;
-    sp.h.size = sizeof(IdPacket);
-    sp.h.id = static_cast<unsigned short>(PacketId::Observe);
-    sp.id = targetIdx;
+    auto p = MakeIdPacket(PacketId::Observe, targetIdx);
 
-    SendTo(observerIdx, (char*)&sp, sp.h.size);
+    SendTo(observerIdx, (char*)&p, p.h.size);
 }

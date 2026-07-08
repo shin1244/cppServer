@@ -55,3 +55,21 @@ struct RecvPacket {
     PacketId id;
     std::vector<char> body;
 };
+
+inline IdPacket MakeIdPacket(PacketId packetId, int id) {
+    IdPacket p;
+    p.h.size = sizeof(IdPacket);
+    p.h.id = static_cast<unsigned short>(packetId);
+    p.id = id;
+    return p;
+}
+
+inline Vec2Packet MakeVec2Packet(PacketId packetId, int id, float x, float y) {
+    Vec2Packet p;
+    p.h.size = sizeof(Vec2Packet);
+    p.h.id = static_cast<unsigned short>(packetId);
+    p.id = id;
+    p.x = x;
+    p.y = y;
+    return p;
+}
