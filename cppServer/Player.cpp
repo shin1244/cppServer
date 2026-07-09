@@ -3,7 +3,7 @@
 void Player::SetKeys(unsigned char k) { keys = k; }
 
 void Player::Update(float dt) {
-    if (fireCooldown > 0.0f) fireCooldown -= dt; // ��� ��Ÿ��
+    if (fireCooldown > 0.0f) fireCooldown -= dt;
 
     float dx = 0, dy = 0;
     if (keys & 0x01) dy -= 1;
