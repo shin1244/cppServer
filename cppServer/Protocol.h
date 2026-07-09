@@ -47,6 +47,7 @@ enum class PacketId : unsigned short {
     Observe,
     End,
     RemoveItem,
+    PlayerStats,
 };
 
 const int HEADER_SIZE = 4;

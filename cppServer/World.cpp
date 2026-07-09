@@ -40,10 +40,20 @@ void World::UpdatePlayers(float dt) {
         float cy = slots[i].player.GetY();
         int itemIdx = FindItemAt(cx, cy);
         if (itemIdx != -1) {
-            items[itemIdx].GetType();
+            int type = items[itemIdx].GetType();
+            float ix = items[itemIdx].GetX();
+            float iy = items[itemIdx].GetY();
+            slots[i].player.GetItem(type);       // 스탯 효과 적용
             items[itemIdx].Clear();
-            auto p = MakeVec2Packet(PacketId::RemoveItem, 0, items[itemIdx].GetX(), items[itemIdx].GetY());
-            Broadcast((char*)&p, p.h.size);
+
+            // 모두에게: 해당 위치의 아이템 제거
+            auto rp = MakeVec2Packet(PacketId::RemoveItem, 0, ix, iy);
+            Broadcast((char*)&rp, rp.h.size);
+
+            // 주운 본인에게만: 먹은 타입 + 갱신된 스탯 (id=타입, x=이동속도, y=사격간격)
+            auto sp = MakeVec2Packet(PacketId::PlayerStats, type,
+                slots[i].player.GetSpeed(), slots[i].player.GetFireInterval());
+            SendTo(i, (char*)&sp, sp.h.size);
         }
         if (map.IsWall(cx, oy)) {
             cx = ox;
@@ -274,7 +284,7 @@ void World::ObservePlayer(int observerIdx, int targetIdx) {
 
 int World::RollWallDropItemId() {
     static std::mt19937 rng(SEED);
-    static std::uniform_int_distribution<int> dist(0, 3);
+    static std::uniform_int_distribution<int> dist(0, 2);
     return dist(rng);
 }
 

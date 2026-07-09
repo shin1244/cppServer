@@ -46,6 +46,7 @@ const (
 	pktObserve      = 14
 	pktEnd          = 15
 	pktRemoveItem   = 16
+	pktPlayerStats  = 17
 )
 
 const (
@@ -77,6 +78,11 @@ type Game struct {
 	worldW, worldH float32         // 맵 필드의 월드 크기 (width*cellSize)
 	wallSet        map[[2]int]bool // 벽 셀 집합 (그림자캐스팅 시야 계산용)
 	cols, rows     int             // 맵 셀 개수
+
+	// 내 스탯 (서버가 pktPlayerStats 로 내려준 값). 우측 상단 스탯창에 표시.
+	moveSpeed    float32 // 현재 이동 속도 (유닛/초)
+	fireInterval float32 // 현재 사격 간격 (초). 사격 속도 = 1/fireInterval
+	itemCounts   [4]int  // 타입별 획득 개수 (1=사격, 2=이동)
 
 	myID         int32
 	spectateID   int32   // 관전 중 따라갈 대상 슬롯 id (없으면 -1)
@@ -213,6 +219,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	spectating := followID != g.myID
 	disconnected, errText := g.disconnected, g.errText
 	matchOver, winnerID := g.matchOver, g.winnerID
+	moveSpeed, fireInterval := g.moveSpeed, g.fireInterval
+	fireItems, moveItems := g.itemCounts[1], g.itemCounts[2]
 	g.mu.Unlock()
 
 	// 벽에 가려진(시야 밖) 셀을 어둡게 덮는다. (셀 그림자캐스팅 결과)
@@ -237,6 +245,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	if _, ok := hasMe(g, myID); !ok && !disconnected && !spectating && !matchOver {
 		ebitenutil.DebugPrintAt(screen, "대기 중... 서버는 슬롯 4개가 모두 차야 매치가 시작됩니다", 12, 32)
 	}
+
+	// 우측 상단 스탯창
+	drawStatPanel(screen, moveSpeed, fireInterval, fireItems, moveItems)
 
 	// 매치 종료 배너
 	if matchOver {
@@ -396,6 +407,17 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 		// 좌표는 셀 중심으로 스냅돼 저장되므로 셀 단위로 매칭해 제거한다.
 		if _, x, y, ok := readVec2(body); ok {
 			g.removeItemAt(x, y)
+		}
+
+	case pktPlayerStats:
+		// Vec2Packet: id=먹은 아이템 타입, x=현재 이동속도, y=현재 사격간격.
+		// 서버가 "나"에게만 보낸다. 타입별 개수를 세고 현재 스탯을 갱신한다.
+		if t, speed, interval, ok := readVec2(body); ok {
+			if t >= 0 && int(t) < len(g.itemCounts) {
+				g.itemCounts[t]++
+			}
+			g.moveSpeed = speed
+			g.fireInterval = interval
 		}
 
 	case pktObserve:
@@ -646,6 +668,26 @@ func drawCellFog(screen *ebiten.Image, visible map[[2]int]bool, camX, camY, cs f
 	}
 }
 
+// 우측 상단 스탯창: 현재 이동/사격 속도와 타입별 아이템 획득 수를 표시.
+func drawStatPanel(screen *ebiten.Image, moveSpeed, fireInterval float32, fireItems, moveItems int) {
+	const w, h = 200, 96
+	x := float32(screenW - w - 12)
+	y := float32(12)
+	vector.DrawFilledRect(screen, x, y, w, h, color.RGBA{0, 0, 0, 170}, false)
+	vector.StrokeRect(screen, x, y, w, h, 1, color.RGBA{90, 98, 110, 255}, false)
+
+	fireRate := float32(0)
+	if fireInterval > 0 {
+		fireRate = 1.0 / fireInterval
+	}
+	tx := int(x) + 12
+	ebitenutil.DebugPrintAt(screen, "── 스탯 ──", tx, int(y)+8)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("이동 속도 : %.0f", moveSpeed), tx, int(y)+28)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("사격 속도 : %.1f 발/초", fireRate), tx, int(y)+44)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("사격 아이템 : %d개", fireItems), tx, int(y)+64)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("이동 아이템 : %d개", moveItems), tx, int(y)+80)
+}
+
 // ---- 그리기 유틸 ----
 
 // 카메라 오프셋에 맞춰 월드 격자선을 그린다. 격자는 맵 필드 안쪽만.
@@ -751,13 +793,15 @@ func main() {
 	defer conn.Close()
 
 	game := &Game{
-		conn:       conn,
-		players:    make(map[int32]*PlayerView),
-		bullets:    make(map[int32]*BulletView),
-		myID:       -1,
-		spectateID: -1,
-		winnerID:   -1,
-		fog:        makeFog(),
+		conn:         conn,
+		players:      make(map[int32]*PlayerView),
+		bullets:      make(map[int32]*BulletView),
+		myID:         -1,
+		spectateID:   -1,
+		winnerID:     -1,
+		moveSpeed:    300.0,  // 서버 Player 초기값과 동일
+		fireInterval: 0.25,   // 서버 Player 초기값과 동일
+		fog:          makeFog(),
 	}
 
 	// 서버는 accept 시점에 자동 Join 을 처리하므로 클라에서 Join 을 또 보내지 않는다.

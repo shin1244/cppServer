@@ -607,4 +607,52 @@ function hArrow(slide, x, cy, len) {
   s.addNotes("5가지 배운 점으로 마무리. 각 실험 슬라이드의 결론을 한 줄로 압축한 것.");
 }
 
+// =========================================================================
+// SLIDE 12 — 트러블슈팅: 링 버퍼 크기 불일치 디버깅
+// =========================================================================
+{
+  const s = pres.addSlide();
+  header(s, "Trouble Shooting · Recv Buffer", "트러블슈팅 — 링 버퍼 크기 불일치 디버깅");
+
+  s.addText("링 버퍼와 가변 버퍼를 같은 512 크기로 맞춰 비교하던 중, 링 버퍼에서만 두 문제가 연달아 발생했습니다.", {
+    x: 0.6, y: 1.4, w: 8.8, h: 0.35, margin: 0, fontFace: FONT, fontSize: 14.5, color: SLATE,
+  });
+
+  // 한 문제(증상 → 원인 → 해결)를 담는 카드
+  function issueCard(x, y, w, h, num, title, tag, secs) {
+    card(s, x, y, w, h, WHITE, { shadow: true });
+    const bd = 0.34;
+    s.addShape(pres.shapes.OVAL, { x: x + 0.24, y: y + 0.22, w: bd, h: bd, fill: { color: TEALDK } });
+    s.addText(String(num), { x: x + 0.24, y: y + 0.22, w: bd, h: bd, margin: 0, fontFace: FONT, fontSize: 13, bold: true, color: WHITE, align: "center", valign: "middle" });
+    s.addText(title, { x: x + 0.68, y: y + 0.2, w: w - 0.9, h: 0.34, margin: 0, fontFace: FONT, fontSize: 15, bold: true, color: HEAD, valign: "middle" });
+    s.addText(tag, { x: x + 0.68, y: y + 0.54, w: w - 0.9, h: 0.24, margin: 0, fontFace: MONO, fontSize: 10.5, color: MUTED });
+    const runs = [];
+    secs.forEach(([label, body, lc]) => {
+      runs.push({ text: label + "  ", options: { bold: true, color: lc } });
+      runs.push({ text: body, options: { breakLine: true, paraSpaceAfter: 6, color: SLATE } });
+    });
+    s.addText(runs, {
+      x: x + 0.28, y: y + 0.9, w: w - 0.56, h: h - 1.04, margin: 0,
+      fontFace: FONT, fontSize: 11, valign: "top", lineSpacingMultiple: 1.05,
+    });
+  }
+
+  const cy = 1.9, ch = 2.62;
+  issueCard(0.6, cy, 4.28, ch, 1, "링 버퍼에서만 크래시", "RingBuffer · buffer[512]", [
+    ["증상", "두 버퍼를 같은 512로 맞추자 가변 버퍼는 정상, 링 버퍼만 크래시", RED],
+    ["원인", "배열은 buffer[512]로 줄였지만 크기 상한이 4096으로 하드코딩된 채 남아 인덱스 범위 불일치", HEAD],
+    ["해결", "크기를 단일 상수 BUFFER_SIZE로 통일해 배열·경계 계산이 같은 값을 참조", TEALDK],
+  ]);
+  issueCard(5.12, cy, 4.28, ch, 2, "링 버퍼에서만 맵 깨짐", "초기 MapSnapshot > 512B", [
+    ["증상", "크래시 해결 후, 링 버퍼일 때만 클라이언트에서 맵이 일부만 렌더링", RED],
+    ["원인", "초기 맵 스냅샷 데이터가 512B를 초과 → 고정 크기 링 버퍼 상한에 걸려 일부만 적재", HEAD],
+    ["해결", "가변 버퍼는 필요한 만큼 grow해 안전 전송. 링은 초기 대형 데이터용 상한·분할 정책이 필요함을 확인", TEALDK],
+  ]);
+
+  callout(s, 0.6, 4.72, 8.8, 0.66, "배운 점",
+    "같은 512라도 '실패하는 방식'이 달랐습니다. 버퍼 크기는 단일 상수로 통일하고, 맵 스냅샷 같은 초기 대형 데이터는 고정 버퍼의 상한을 설계 단계에서 고려해야 합니다.");
+
+  s.addNotes("실험 2(링 vs 가변)의 실제 디버깅 경험. ① char buffer[512]로 줄였으나 4096 하드코딩 상한이 남아 크래시 → BUFFER_SIZE 단일 상수화(현재 4068)로 해결. ② 초기 MapSnapshot이 512B 초과 → 고정 링 버퍼 상한에 걸려 맵 일부만 로딩. VectorBuffer는 resize(512) 시작 후 Reserve로 grow하여 통과. '최악의 경우 어떻게 무너지는가'라는 실험 2 결론과 연결.");
+}
+
 pres.writeFile({ fileName: "portfolio.pptx" }).then((f) => console.log("wrote", f));
