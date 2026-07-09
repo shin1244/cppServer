@@ -6,7 +6,7 @@ private:
     unsigned char keys = 0;
     float PLAYER_SPEED = 300.0f;
     float fireCooldown = 0.0f;
-    static constexpr float FIRE_INTERVAL = 0.25f;
+    float FIRE_INTERVAL = 0.25f;
 
 public:
 	// 플레이어의 입력 키를 설정합니다.

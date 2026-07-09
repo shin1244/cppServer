@@ -11,3 +11,8 @@ bool Item::IsActive() const { return active; }
 float Item::GetX() const { return x; }
 float Item::GetY() const { return y; }
 int Item::GetType() const { return type; }
+bool Item::ContainsPoint(float px, float py, float radius) const {
+	if (!active) return false;
+	float dx = x - px, dy = y - py;
+	return dx * dx + dy * dy <= radius * radius;
+}

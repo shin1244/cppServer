@@ -38,6 +38,13 @@ void World::UpdatePlayers(float dt) {
 
         float cx = slots[i].player.GetX();
         float cy = slots[i].player.GetY();
+        int itemIdx = FindItemAt(cx, cy);
+        if (itemIdx != -1) {
+            items[itemIdx].GetType();
+            items[itemIdx].Clear();
+            auto p = MakeVec2Packet(PacketId::RemoveItem, 0, items[itemIdx].GetX(), items[itemIdx].GetY());
+            Broadcast((char*)&p, p.h.size);
+        }
         if (map.IsWall(cx, oy)) {
             cx = ox;
         }
@@ -60,9 +67,12 @@ void World::UpdateBullets(float dt) {
             if (map.DamageWall(cx, cy)) {
                 int itemDropId = RollWallDropItemId();
                 if (itemDropId > 0) {
-                    for (int i = 0; i < MAX_ITEMS; i++) {
-                        if (items[i].IsActive()) continue;
-                        items[i].Spawn(cx, cy, itemDropId);
+                    for (int j = 0; j < MAX_ITEMS; j++) {
+                        if (items[j].IsActive()) continue;
+                        float itemX = std::floor(cx / Map::CELL_SIZE) * Map::CELL_SIZE + Map::CELL_SIZE / 2.0f;
+                        float itemY = std::floor(cy / Map::CELL_SIZE) * Map::CELL_SIZE + Map::CELL_SIZE / 2.0f;
+                        items[j].Spawn(itemX, itemY, itemDropId);
+                        break;
                     }
                 }
                 auto p = MakeVec2Packet(PacketId::Destroy, itemDropId, cx, cy);
@@ -192,14 +202,14 @@ void World::SendAOIUpdates() {
             if (!map.HasLineOfSight(myX, myY,
                 bullets[target].GetX(), bullets[target].GetY()))
                 continue;
-            currentVisibleBullet[target] = true;                  // ①
+            currentVisibleBullet[target] = true;
             auto p = MakeVec2Packet(PacketId::MoveBullet, target,
                 bullets[target].GetX(), bullets[target].GetY());
             SendTo(i, (char*)&p, p.h.size);
             for (int ob : slots[i].observers) SendTo(ob, (char*)&p, p.h.size);
         }
 
-        for (int t = 0; t < MAX_BULLETS; ++t) {                   // ②
+        for (int t = 0; t < MAX_BULLETS; ++t) {
             if (slots[i].visibleBullet[t] && !currentVisibleBullet[t]) {
                 auto p = MakeIdPacket(PacketId::HideBullet, t);
                 SendTo(i, (char*)&p, p.h.size);
@@ -266,4 +276,11 @@ int World::RollWallDropItemId() {
     static std::mt19937 rng(SEED);
     static std::uniform_int_distribution<int> dist(0, 3);
     return dist(rng);
+}
+
+int World::FindItemAt(float px, float py) const {
+    for (int i = 0; i < MAX_ITEMS; ++i) {
+        if (items[i].ContainsPoint(px, py, PLAYER_RADIUS + 10.0f)) return i;
+    }
+    return -1;
 }

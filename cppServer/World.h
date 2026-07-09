@@ -88,4 +88,5 @@ private:
     void TryStartMatch();
     void ObservePlayer(int observerIdx, int targetIdx);
     int RollWallDropItemId();
+    int FindItemAt(float px, float py) const;
 };

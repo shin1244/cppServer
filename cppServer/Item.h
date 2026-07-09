@@ -11,4 +11,6 @@ public:
     float GetX() const;
     float GetY() const;
     int GetType() const;
+
+    bool ContainsPoint(float px, float py, float radius) const;
 };

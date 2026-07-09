@@ -45,6 +45,7 @@ const (
 	pktDestroy      = 13
 	pktObserve      = 14
 	pktEnd          = 15
+	pktRemoveItem   = 16
 )
 
 const (
@@ -390,6 +391,13 @@ func (g *Game) handlePacket(id uint16, body []byte) {
 			}
 		}
 
+	case pktRemoveItem:
+		// Vec2Packet: id(4, 미사용) x(4) y(4). 플레이어가 주운 아이템의 원본 좌표.
+		// 좌표는 셀 중심으로 스냅돼 저장되므로 셀 단위로 매칭해 제거한다.
+		if _, x, y, ok := readVec2(body); ok {
+			g.removeItemAt(x, y)
+		}
+
 	case pktObserve:
 		// IdPacket: 내가 죽어 관전자가 되었을 때(또는 대상 순환 시) 따라갈 대상 슬롯 id
 		if pid, ok := readID(body); ok {
@@ -416,6 +424,23 @@ func (g *Game) removeWallAt(wx, wy float32) {
 	for i, w := range g.walls {
 		if int(w.x/g.cellSize) == cx && int(w.y/g.cellSize) == cy {
 			g.walls = append(g.walls[:i], g.walls[i+1:]...)
+			return
+		}
+	}
+}
+
+// 월드 좌표가 속한 셀의 아이템을 제거한다. (호출자가 g.mu 를 잡고 있어야 함)
+// 서버는 원본 좌표를 보내지만 클라의 아이템은 셀 중심으로 저장돼 있으므로
+// 벽 제거와 동일하게 셀 인덱스로 비교한다.
+func (g *Game) removeItemAt(wx, wy float32) {
+	if g.cellSize <= 0 {
+		return
+	}
+	cx := int(wx / g.cellSize)
+	cy := int(wy / g.cellSize)
+	for i, it := range g.items {
+		if int(it.x/g.cellSize) == cx && int(it.y/g.cellSize) == cy {
+			g.items = append(g.items[:i], g.items[i+1:]...)
 			return
 		}
 	}
