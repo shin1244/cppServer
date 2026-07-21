@@ -95,6 +95,11 @@ void Accepter(SOCKET s) {
 
         session->socket = clientSocket;
         session->index = index;
+        session->roomId = -1;
+        session->sendPending = false;
+        session->connected = true;
+        session->recvBuffer.Clear();
+        session->sendBuffer.Clear();
 
         CreateIoCompletionPort((HANDLE)clientSocket, g_iocp, (ULONG_PTR)session, 0);
 

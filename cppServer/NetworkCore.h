@@ -27,8 +27,6 @@ struct Session {
     RingBuffer sendBuffer;
 #endif
 
-
-
     bool sendPending;
     std::mutex sendLock;
 
